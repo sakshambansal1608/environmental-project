@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>AquaWatch India — Mapping Water Stress</title>
+<meta name="description" content="Digital mapping of water scarcity hotspots in Indian cities — an LPU CHE110 project.">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#06111D; --deep:#09263A; --deep2:#0C2F47; --cyan:#28D9F2; --blue:#168BFF; --white:#F2F8FC;
+  --mute:#8FA6B8; --line:rgba(40,217,242,.16); --line2:rgba(242,248,252,.08);
+  --amber:#F2B544; --coral:#FF7A66; --safe:#28D9F2; --semi:#7FB8FF; --crit:#F2B544; --over:#FF7A66;
+  --glass:rgba(9,38,58,.55);
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --r-sm:6px; --r-md:14px; --r-lg:24px;
+  --ease:cubic-bezier(.2,.7,.1,1);
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --ink:#06111D; --white:#F2F8FC; } }
+:root[data-theme="dark"]{ --ink:#06111D; --white:#F2F8FC; }
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 72px); scroll-behavior:smooth; background:var(--ink)}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important} }
+body{margin:0; background:var(--ink); color:var(--white); font-family:var(--body); font-size:17px; line-height:1.6; overflow-x:hidden; -webkit-font-smoothing:antialiased}
+img,svg,canvas{max-width:100%; display:block}
+a{color:var(--cyan)}
+button,input,select{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--cyan); outline-offset:3px; border-radius:4px}
+h1,h2,h3,h4{font-family:var(--display); margin:0; line-height:1.05; letter-spacing:-.02em}
+h2{font-size:clamp(2.2rem,5vw,4.2rem); font-weight:800}
+h3{font-size:clamp(1.3rem,2.2vw,1.7rem); font-weight:600}
+p{margin:0 0 1em}
+.mute{color:var(--mute)}
+.wrap{width:min(1280px,100% - 40px); margin-inline:auto}
+section{position:relative; padding:clamp(80px,12vw,150px) 0}
+.lede{font-size:1.15rem; max-width:62ch; color:#C7D6E2}
+.kicker{font-family:var(--display); color:var(--cyan); font-weight:600; font-size:1rem; margin-bottom:14px; display:flex; gap:10px; align-items:center}
+.kicker::before{content:""; width:28px; height:2px; background:var(--cyan)}
+
+/* background system */
+.bg{position:fixed; inset:0; z-index:-1; pointer-events:none;
+ background:
+  radial-gradient(1200px 700px at 85% -10%, rgba(22,139,255,.16), transparent 60%),
+  radial-gradient(900px 600px at -10% 40%, rgba(40,217,242,.07), transparent 60%),
+  linear-gradient(180deg,#06111D 0%,#071827 50%,#06111D 100%)}
+.bg svg{position:absolute; inset:0; width:100%; height:100%; opacity:.22}
+
+/* demo badge */
+.demo{display:inline-flex; align-items:center; gap:4px; font-size:.68rem; font-weight:600; padding:2px 7px; border-radius:20px; background:rgba(242,181,68,.14); color:var(--amber); border:1px solid rgba(242,181,68,.35); vertical-align:middle; letter-spacing:.02em}
+.na{color:var(--mute); font-style:italic}
+
+/* loader */
+#loader{position:fixed; inset:0; z-index:100; background:var(--ink); display:grid; place-items:center; transition:opacity .6s var(--ease), visibility .6s}
+#loader.done{opacity:0; visibility:hidden}
+#loader .ring{width:84px; height:84px; position:relative}
+#loader .ring svg{width:100%; height:100%}
+#loader .ring circle{fill:none; stroke:var(--cyan); stroke-width:1.5; stroke-dasharray:220; stroke-dashoffset:220; animation:draw 1.2s var(--ease) forwards}
+#loader .ring path{fill:var(--cyan); opacity:0; animation:fade .5s .6s forwards}
+#loader p{margin-top:18px; font-family:var(--display); color:var(--mute); text-align:center}
+#loader button{margin-top:6px; background:none; border:0; color:var(--cyan); cursor:pointer; text-decoration:underline; font-size:.9rem}
+@keyframes draw{to{stroke-dashoffset:0}} @keyframes fade{to{opacity:1}}
+
+/* nav */
+#progress{position:fixed; top:0; left:0; height:2px; width:0; background:linear-gradient(90deg,var(--blue),var(--cyan)); z-index:60}
+header.nav{position:fixed; top:0; left:0; right:0; z-index:50; padding-top:env(safe-area-inset-top,0px); transition:background .3s, border-color .3s; border-bottom:1px solid transparent}
+header.nav.scrolled{background:rgba(6,17,29,.82); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-color:var(--line2)}
+.nav-in{display:flex; align-items:center; justify-content:space-between; height:68px}
+.logo{display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--white); font-family:var(--display); font-weight:800; font-size:1.1rem; letter-spacing:-.01em}
+.logo svg{width:30px; height:30px}
+.logo small{display:block; font-family:var(--body); font-weight:500; font-size:.68rem; color:var(--mute); letter-spacing:0}
+nav ul{list-style:none; margin:0; padding:0; display:flex; gap:4px}
+nav a{color:#C7D6E2; text-decoration:none; padding:8px 14px; border-radius:20px; font-size:.95rem; transition:color .2s, background .2s}
+nav a:hover,nav a.active{color:var(--white); background:rgba(40,217,242,.1)}
+.menu-btn{display:none; background:none; border:1px solid var(--line); border-radius:10px; width:42px; height:42px; cursor:pointer}
+@media (max-width:860px){
+ .menu-btn{display:grid; place-items:center}
+ nav ul{position:fixed; top:calc(68px + env(safe-area-inset-top,0px)); left:0; right:0; flex-direction:column; background:rgba(6,17,29,.97); padding:12px 20px 24px; border-bottom:1px solid var(--line); transform:translateY(-8px); opacity:0; visibility:hidden; transition:.25s}
+ nav ul.open{transform:none; opacity:1; visibility:visible}
+ nav a{display:block; padding:14px; font-size:1.1rem}
+}
+
+/* buttons */
+.btn{display:inline-flex; align-items:center; gap:10px; padding:15px 24px; border-radius:40px; border:1px solid var(--line); background:transparent; cursor:pointer; font-weight:600; font-size:.92rem; letter-spacing:.04em; text-decoration:none; color:var(--white); transition:transform .25s var(--ease), background .25s, border-color .25s, box-shadow .25s; will-change:transform}
+.btn.primary{background:linear-gradient(135deg,var(--blue),var(--cyan)); border-color:transparent; color:#03121F; box-shadow:0 10px 40px -10px rgba(40,217,242,.6)}
+.btn.primary:hover{box-shadow:0 14px 50px -8px rgba(40,217,242,.85)}
+.btn:hover{border-color:var(--cyan)}
+.btn.sm{padding:9px 16px; font-size:.82rem; letter-spacing:0}
+.chip{border:1px solid var(--line); background:rgba(9,38,58,.5); border-radius:30px; padding:8px 14px; cursor:pointer; font-size:.88rem; transition:.2s}
+.chip[aria-pressed="true"],.chip.on{background:var(--cyan); color:#03121F; border-color:var(--cyan); font-weight:600}
+
+/* hero */
+#home{min-height:100svh; padding:0; display:flex; align-items:center; overflow:hidden}
+#globe-wrap{position:absolute; top:0; right:-6vw; width:62vw; height:100%; z-index:0}
+#globe-wrap canvas{width:100%!important; height:100%!important; cursor:grab}
+#globe-wrap canvas:active{cursor:grabbing}
+.hero-in{position:relative; z-index:2; padding-top:100px; padding-bottom:80px; pointer-events:none}
+.hero-in > *{pointer-events:auto}
+.hero-tag{font-family:var(--display); font-weight:800; letter-spacing:.24em; font-size:.85rem; color:var(--cyan)}
+.hero-tag span{display:block; color:var(--mute); font-weight:400; letter-spacing:.18em; font-size:.72rem; margin-top:6px}
+.hero-title{font-size:clamp(3rem,8.2vw,7.6rem); font-weight:800; line-height:.92; letter-spacing:-.045em; margin:28px 0 26px; max-width:9ch}
+.hero-title .ln{display:block; overflow:hidden}
+.hero-title .ln > span{display:inline-block}
+.hero-copy{max-width:44ch; font-size:1.12rem; color:#C7D6E2}
+.hero-ctas{display:flex; flex-wrap:wrap; gap:14px; margin-top:34px}
+.hero-meta{margin-top:48px; display:flex; gap:28px; flex-wrap:wrap; font-size:.85rem; color:var(--mute)}
+.hero-meta b{display:block; font-family:var(--display); color:var(--white); font-size:1.05rem}
+.scroll-cue{position:absolute; bottom:28px; left:50%; transform:translateX(-50%); z-index:2; color:var(--mute); font-size:.78rem; display:flex; flex-direction:column; align-items:center; gap:8px}
+.scroll-cue i{width:1px; height:42px; background:linear-gradient(var(--cyan),transparent); animation:cue 2s infinite}
+@keyframes cue{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+.globe-hint{position:absolute; right:24px; bottom:28px; z-index:2; font-size:.78rem; color:var(--mute)}
+@media (max-width:860px){
+ #globe-wrap{width:120vw; right:-30vw; height:62svh; top:40px; opacity:.85}
+ .hero-in{padding-top:46svh}
+ .hero-title{font-size:clamp(2.8rem,13vw,4.4rem)}
+ .globe-hint{display:none}
+}
+
+/* crisis strip */
+.crisis{padding:90px 0 40px}
+.crisis-grid{display:grid; grid-template-columns:1.2fr 1fr; gap:60px; align-items:end}
+.stats{display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line)}
+.stat{padding:22px 18px 0 0}
+.stat b{font-family:var(--display); font-size:clamp(2.2rem,4vw,3.4rem); font-weight:800; display:block; line-height:1; color:var(--white)}
+.stat span{font-size:.88rem; color:var(--mute); display:block; margin-top:8px}
+.stat cite{font-style:normal; font-size:.72rem; color:#6F879A; display:block; margin-top:6px}
+@media (max-width:860px){.crisis-grid{grid-template-columns:1fr; gap:30px} .stats{grid-template-columns:1fr 1fr 1fr}}
+@media (max-width:520px){.stats{grid-template-columns:1fr}}
+
+/* map */
+#map{padding-top:110px}
+.sec-head{display:flex; justify-content:space-between; align-items:end; gap:40px; flex-wrap:wrap; margin-bottom:36px}
+.sec-head .lede{margin:14px 0 0}
+.map-shell{display:grid; grid-template-columns:260px 1fr 330px; border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; background:rgba(6,17,29,.6); min-height:680px}
+.map-rail{padding:22px; border-right:1px solid var(--line2); display:flex; flex-direction:column; gap:22px; overflow:auto}
+.map-rail h4{font-family:var(--body); font-size:.82rem; color:var(--mute); font-weight:600; margin-bottom:10px}
+.seg{display:flex; flex-direction:column; gap:6px}
+.seg button{text-align:left; background:transparent; border:1px solid var(--line2); border-radius:10px; padding:10px 12px; cursor:pointer; font-size:.9rem; transition:.2s}
+.seg button[aria-pressed="true"]{border-color:var(--cyan); background:rgba(40,217,242,.1)}
+.seg button small{display:block; color:var(--mute); font-size:.74rem}
+.toggle{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:.9rem; padding:6px 0; cursor:pointer}
+.toggle input{appearance:none; width:36px; height:20px; border-radius:20px; background:#1A3A52; position:relative; cursor:pointer; transition:.2s; flex:none}
+.toggle input::after{content:""; position:absolute; width:14px; height:14px; border-radius:50%; background:var(--white); top:3px; left:3px; transition:.2s}
+.toggle input:checked{background:var(--cyan)}
+.toggle input:checked::after{left:19px; background:#03121F}
+select{width:100%; background:#0B2234; border:1px solid var(--line); border-radius:10px; padding:10px 12px; cursor:pointer}
+.map-stage{position:relative; min-height:520px; background:radial-gradient(ellipse at 50% 40%, rgba(22,139,255,.12), transparent 70%)}
+#map-canvas{position:absolute; inset:0}
+#map-canvas canvas{width:100%!important; height:100%!important; cursor:grab}
+.map-labels{position:absolute; inset:0; pointer-events:none; overflow:hidden}
+.mlabel{position:absolute; transform:translate(-50%,-140%); pointer-events:auto; background:rgba(6,17,29,.82); border:1px solid var(--line); border-radius:20px; padding:4px 10px; font-size:.78rem; cursor:pointer; white-space:nowrap; transition:border-color .2s, background .2s, opacity .3s}
+.mlabel:hover,.mlabel.sel{border-color:var(--cyan); background:rgba(9,38,58,.95)}
+.mlabel em{font-style:normal; color:var(--cyan); margin-left:6px; font-weight:600}
+.map-legend{position:absolute; left:16px; bottom:16px; background:rgba(6,17,29,.85); border:1px solid var(--line2); border-radius:12px; padding:12px 14px; font-size:.78rem; max-width:290px}
+.map-legend .row{display:flex; gap:8px; align-items:center; margin-top:4px}
+.map-legend i{width:10px; height:10px; border-radius:2px; display:inline-block; flex:none}
+.map-source{position:absolute; right:16px; bottom:16px; left:auto; max-width:280px; font-size:.72rem; color:var(--mute); text-align:right}
+.map-tools{position:absolute; right:14px; top:14px; display:flex; gap:6px}
+.map-tools button{width:36px; height:36px; border-radius:10px; border:1px solid var(--line); background:rgba(6,17,29,.85); cursor:pointer}
+.panel{padding:24px; border-left:1px solid var(--line2); overflow:auto}
+.panel h3{font-size:2rem; font-weight:800}
+.kv{display:grid; grid-template-columns:1fr auto; gap:10px 14px; margin:20px 0; font-size:.9rem}
+.kv dt{color:var(--mute)} .kv dd{margin:0; text-align:right; font-weight:600}
+.cat{display:inline-flex; gap:6px; align-items:center; font-weight:600}
+.cat i{width:9px; height:9px; border-radius:50%}
+.panel .actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+@media (max-width:1100px){.map-shell{grid-template-columns:1fr; } .map-rail{border-right:0; border-bottom:1px solid var(--line2); display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr))} .map-stage{min-height:62svh} .panel{border-left:0; border-top:1px solid var(--line2)}}
+@media (max-width:600px){.map-legend{max-width:60%; font-size:.7rem} .map-source{display:none}}
+
+/* cities */
+.city-tabs{display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; scrollbar-width:thin; margin-bottom:34px}
+.city-tabs .chip{flex:none}
+.city-hero{display:grid; grid-template-columns:1.3fr 1fr; gap:40px; align-items:start}
+.city-name{font-size:clamp(3rem,9vw,8rem); font-weight:800; letter-spacing:-.05em; line-height:.85}
+.city-state{font-family:var(--display); color:var(--mute); font-size:1.2rem; margin-top:10px}
+.locator{border:1px solid var(--line2); border-radius:var(--r-md); padding:14px; background:rgba(9,38,58,.3)}
+.locator svg{width:100%; height:auto}
+.metric-row{display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin:40px 0}
+.metric{padding:22px 18px; border-right:1px solid var(--line2)}
+.metric:last-child{border-right:0}
+.metric label{font-size:.8rem; color:var(--mute); display:block}
+.metric b{font-family:var(--display); font-size:2rem; font-weight:800; display:block; margin-top:6px; line-height:1.1}
+.metric small{color:var(--mute); font-size:.78rem}
+.chart-grid{display:grid; grid-template-columns:1fr 1fr; gap:22px}
+.chart-card{border:1px solid var(--line2); border-radius:var(--r-md); padding:20px; background:rgba(9,38,58,.32)}
+.chart-card header{display:flex; justify-content:space-between; gap:10px; align-items:start; margin-bottom:12px}
+.chart-card h4{font-family:var(--body); font-size:1rem; font-weight:600}
+.chart-card .src{font-size:.72rem; color:var(--mute); margin-top:10px}
+.chart-box{position:relative; height:260px}
+.city-cols{display:grid; grid-template-columns:repeat(3,1fr); gap:36px; margin-top:44px}
+.city-cols h4{font-family:var(--display); font-size:1.15rem; margin-bottom:12px}
+.city-cols ul{margin:0; padding:0; list-style:none}
+.city-cols li{padding:10px 0; border-top:1px solid var(--line2); font-size:.95rem; color:#C7D6E2}
+.city-fade{transition:opacity .35s var(--ease), transform .35s var(--ease)}
+.city-fade.out{opacity:0; transform:translateY(10px)}
+@media (max-width:900px){.city-hero,.chart-grid,.city-cols{grid-template-columns:1fr} .metric-row{grid-template-columns:1fr 1fr} .metric:nth-child(2){border-right:0} .metric:nth-child(-n+2){border-bottom:1px solid var(--line2)}}
+
+/* cutaway */
+#science{background:linear-gradient(180deg,transparent,rgba(9,38,58,.45) 20%,rgba(9,38,58,.45) 80%,transparent)}
+.cut-shell{display:grid; grid-template-columns:1fr 340px; gap:0; border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; background:rgba(6,17,29,.7)}
+.cut-stage{position:relative; min-height:600px}
+#cut-canvas{position:absolute; inset:0}
+#cut-canvas canvas{width:100%!important; height:100%!important}
+.hotspots{position:absolute; inset:0; pointer-events:none}
+.hs{position:absolute; transform:translate(-50%,-50%); pointer-events:auto}
+.hs button{width:26px; height:26px; border-radius:50%; border:1.5px solid var(--white); background:rgba(6,17,29,.7); cursor:pointer; font-size:.75rem; font-weight:700; display:grid; place-items:center; color:var(--white); box-shadow:0 0 0 4px rgba(40,217,242,.18)}
+.hs .tip{position:absolute; left:50%; bottom:34px; transform:translateX(-50%); width:220px; background:rgba(6,17,29,.96); border:1px solid var(--cyan); border-radius:12px; padding:12px 14px; font-size:.82rem; line-height:1.45; opacity:0; visibility:hidden; transition:.2s; z-index:3}
+.hs .tip b{display:block; font-family:var(--display); font-size:.95rem; margin-bottom:4px; color:var(--cyan)}
+.hs:hover .tip,.hs:focus-within .tip,.hs.open .tip{opacity:1; visibility:visible}
+.cut-flag{position:absolute; left:16px; top:16px; font-size:.75rem; background:rgba(6,17,29,.85); border:1px solid rgba(242,181,68,.4); color:var(--amber); padding:6px 12px; border-radius:20px}
+.cut-ctrl{padding:24px; border-left:1px solid var(--line2); display:flex; flex-direction:column; gap:20px}
+.stages{display:grid; grid-template-columns:repeat(6,1fr); gap:5px}
+.stages button{aspect-ratio:1; border-radius:10px; border:1px solid var(--line); background:transparent; cursor:pointer; font-family:var(--display); font-weight:600}
+.stages button[aria-pressed="true"]{background:var(--cyan); color:#03121F; border-color:var(--cyan)}
+.stage-text{min-height:120px}
+.stage-text h4{font-family:var(--display); font-size:1.25rem; margin-bottom:6px}
+.stage-text p{font-size:.93rem; color:#C7D6E2}
+.range label{display:flex; justify-content:space-between; font-size:.88rem; margin-bottom:8px}
+.range output{color:var(--cyan); font-weight:600}
+input[type=range]{width:100%; appearance:none; height:4px; border-radius:4px; background:#1A3A52; cursor:pointer}
+input[type=range]::-webkit-slider-thumb{appearance:none; width:20px; height:20px; border-radius:50%; background:var(--cyan); border:3px solid var(--ink); box-shadow:0 0 0 1px var(--cyan)}
+input[type=range]::-moz-range-thumb{width:16px; height:16px; border-radius:50%; background:var(--cyan); border:3px solid var(--ink)}
+.gauge{border:1px solid var(--line2); border-radius:12px; padding:14px}
+.gauge .bar{height:8px; background:#1A3A52; border-radius:8px; overflow:hidden; margin-top:8px}
+.gauge .bar i{display:block; height:100%; background:linear-gradient(90deg,var(--coral),var(--amber),var(--cyan)); width:50%; transition:width .3s}
+@media (max-width:980px){.cut-shell{grid-template-columns:1fr} .cut-stage{min-height:62svh} .cut-ctrl{border-left:0; border-top:1px solid var(--line2)}}
+
+/* solutions */
+.sol-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); margin-bottom:80px}
+.sol{padding:30px 26px 34px 0; border-bottom:1px solid var(--line2)}
+.sol:not(:nth-child(3n)){border-right:1px solid var(--line2)}
+.sol:not(:nth-child(3n+1)){padding-left:26px}
+.sol svg{width:100%; max-width:220px; height:120px; margin-bottom:18px}
+.sol h3{margin-bottom:8px}
+.sol p{color:#C7D6E2; font-size:.95rem; margin:0}
+@media (max-width:900px){.sol-grid{grid-template-columns:1fr 1fr} .sol:nth-child(n){border-right:0; padding-left:0} .sol:nth-child(odd){border-right:1px solid var(--line2); padding-right:20px} .sol:nth-child(even){padding-left:20px}}
+@media (max-width:560px){.sol-grid{grid-template-columns:1fr} .sol:nth-child(n){border-right:0; padding:26px 0}}
+.tools{display:grid; grid-template-columns:1fr 1fr; gap:24px}
+.tool{border:1px solid var(--line); border-radius:var(--r-lg); padding:30px; background:var(--glass); backdrop-filter:blur(8px)}
+.tool h3{font-size:1.7rem; margin-bottom:6px}
+.field{margin-top:18px}
+.field > label{display:block; font-size:.85rem; color:var(--mute); margin-bottom:6px}
+.field input[type=number]{width:100%; background:#0B2234; border:1px solid var(--line); border-radius:10px; padding:11px 12px}
+.field-row{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+.result{margin-top:24px; padding-top:20px; border-top:1px solid var(--line2)}
+.result b{font-family:var(--display); font-size:2.6rem; font-weight:800; line-height:1; display:block}
+.result .two{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+.formula{font-family:var(--display); font-size:1.05rem; color:var(--cyan); margin:12px 0}
+.note{font-size:.8rem; color:var(--mute); margin-top:14px; line-height:1.5}
+.err{color:var(--coral); font-size:.82rem; margin-top:6px; min-height:1em}
+.meter{height:12px; background:#1A3A52; border-radius:8px; overflow:hidden; margin-top:10px}
+.meter i{display:block; height:100%; background:linear-gradient(90deg,var(--blue),var(--cyan)); width:0; transition:width .4s var(--ease)}
+@media (max-width:900px){.tools{grid-template-columns:1fr}}
+
+/* compare */
+.cmp-pick{display:grid; grid-template-columns:1fr auto 1fr; gap:16px; align-items:center; margin-bottom:30px}
+.cmp-pick .vs{font-family:var(--display); font-weight:800; color:var(--mute)}
+.cmp-pick select{font-family:var(--display); font-size:1.3rem; font-weight:600; padding:14px 16px}
+#cmpA{border-color:var(--cyan)} #cmpB{border-color:var(--amber)}
+table{width:100%; border-collapse:collapse; font-size:.93rem}
+th,td{padding:14px 12px; text-align:left; border-bottom:1px solid var(--line2); vertical-align:top}
+th{color:var(--mute); font-weight:600; font-size:.82rem}
+.tbl-wrap{overflow-x:auto; border:1px solid var(--line2); border-radius:var(--r-md); margin-bottom:24px}
+.cmp-charts{display:grid; grid-template-columns:1fr 1fr; gap:22px}
+@media (max-width:900px){.cmp-charts{grid-template-columns:1fr} .cmp-pick{grid-template-columns:1fr} .cmp-pick .vs{text-align:center}}
+
+/* learn */
+.learn-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:20px}
+.lcard{border:1px solid var(--line2); border-radius:var(--r-md); background:rgba(9,38,58,.35); overflow:hidden; display:flex; flex-direction:column}
+.lcard .art{height:150px; background:linear-gradient(180deg,rgba(22,139,255,.12),transparent); border-bottom:1px solid var(--line2); display:grid; place-items:center}
+.lcard .art svg{height:120px; width:auto}
+.lcard .body{padding:22px; display:flex; flex-direction:column; flex:1}
+.lcard h3{font-size:1.35rem; margin-bottom:8px}
+.lcard p{font-size:.93rem; color:#C7D6E2}
+.lcard .more{display:none; font-size:.9rem; color:#C7D6E2}
+.lcard.open .more{display:block}
+.lcard .row{display:flex; gap:8px; margin-top:auto; padding-top:10px; flex-wrap:wrap}
+.quiz{margin-top:16px; padding-top:16px; border-top:1px solid var(--line2); display:none}
+.quiz.show{display:block}
+.quiz p{font-weight:600; color:var(--white)}
+.quiz button.opt{display:block; width:100%; text-align:left; background:transparent; border:1px solid var(--line2); border-radius:10px; padding:10px 12px; margin-top:6px; cursor:pointer; font-size:.88rem}
+.quiz button.opt.right{border-color:var(--cyan); background:rgba(40,217,242,.12)}
+.quiz button.opt.wrong{border-color:var(--coral); background:rgba(255,122,102,.1)}
+.quiz .fb{font-size:.85rem; margin-top:10px; color:var(--mute)}
+@media (max-width:980px){.learn-grid{grid-template-columns:1fr 1fr}}
+@media (max-width:620px){.learn-grid{grid-template-columns:1fr}}
+
+/* methodology */
+.method-grid{display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-bottom:50px}
+.method-grid h4{font-family:var(--display); font-size:1.2rem; margin-bottom:8px}
+.method-grid p{color:#C7D6E2; font-size:.95rem}
+.distinct{display:grid; grid-template-columns:repeat(4,1fr); border:1px solid var(--line2); border-radius:var(--r-md); overflow:hidden; margin-bottom:50px}
+.distinct div{padding:20px; border-right:1px solid var(--line2)}
+.distinct div:last-child{border-right:0}
+.distinct b{font-family:var(--display); display:block; font-size:1.1rem; margin-bottom:6px}
+.distinct p{font-size:.86rem; color:#C7D6E2; margin:0}
+@media (max-width:900px){.method-grid{grid-template-columns:1fr} .distinct{grid-template-columns:1fr 1fr} .distinct div:nth-child(2){border-right:0} .distinct div:nth-child(-n+2){border-bottom:1px solid var(--line2)}}
+footer{border-top:1px solid var(--line2); padding:50px 0 40px; font-size:.88rem; color:var(--mute)}
+.foot{display:flex; justify-content:space-between; gap:30px; flex-wrap:wrap}
+#top{position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom,0px)); width:46px; height:46px; border-radius:50%; border:1px solid var(--line); background:rgba(6,17,29,.9); cursor:pointer; z-index:40; opacity:0; visibility:hidden; transition:.3s; display:grid; place-items:center}
+#top.show{opacity:1; visibility:visible}
+.nogl{position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:30px; color:var(--mute); font-size:.9rem}
+.reveal{opacity:0; transform:translateY(24px)}
+.noscript-safe .reveal{opacity:1; transform:none}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"><svg id="topo" preserveAspectRatio="none"></svg></div>
+<div id="progress"></div>
+
+<div id="loader" role="status" aria-live="polite">
+  <div style="text-align:center">
+    <div class="ring" style="margin:auto"><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="35"/><path d="M42 22c-7 10-12 16-12 23a12 12 0 0 0 24 0c0-7-5-13-12-23z"/></svg></div>
+    <p>Loading water-stress layers</p>
+    <button id="skip">Skip intro</button>
+  </div>
+</div>
+
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a href="#home" class="logo" aria-label="AquaWatch India home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#168BFF"/><stop offset="1" stop-color="#28D9F2"/></linearGradient></defs><path d="M16 2C11 9 6 14.5 6 20a10 10 0 0 0 20 0C26 14.5 21 9 16 2z" fill="none" stroke="url(#lg)" stroke-width="2"/><path d="M9.5 19.5c2-1.5 4.5-1.5 6.5 0s4.5 1.5 6.5 0M10.5 23.5c1.8-1.2 3.8-1.2 5.5 0s3.7 1.2 5.5 0" fill="none" stroke="#28D9F2" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <span>AquaWatch<small>India</small></span>
+    </a>
+    <button class="menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false" aria-controls="navList"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M3 6h14M3 10h14M3 14h14" stroke="#F2F8FC" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    <nav aria-label="Main"><ul id="navList">
+      <li><a href="#home">Home</a></li><li><a href="#map">Map</a></li><li><a href="#cities">Cities</a></li><li><a href="#solutions">Solutions</a></li><li><a href="#learn">Learn</a></li><li><a href="#about">About</a></li>
+    </ul></nav>
+  </div>
+</header>
+
+<main>
+<!-- HERO -->
+<section id="home" aria-label="Introduction">
+  <div id="globe-wrap" aria-label="Interactive 3D globe. Drag to rotate."></div>
+  <div class="wrap hero-in">
+    <div class="hero-tag h-rev">AQUAWATCH INDIA<span>A DIGITAL WATER-SECURITY INITIATIVE</span></div>
+    <h1 class="hero-title" aria-label="Every City Has a Water Story."><span class="ln"><span>Every city</span></span><span class="ln"><span>has a water</span></span><span class="ln"><span>story.</span></span></h1>
+    <p class="hero-copy h-rev">Explore groundwater stress, rainfall patterns and urban water challenges across India through interactive geospatial intelligence.</p>
+    <div class="hero-ctas h-rev">
+      <a class="btn primary mag" href="#map" id="ctaExplore">EXPLORE WATER HOTSPOTS</a>
+      <a class="btn mag" href="#science">UNDERSTAND THE CRISIS</a>
+    </div>
+    <div class="hero-meta h-rev"><div><b>9 cities</b>in this prototype</div><div><b>5 data layers</b>groundwater, rainfall, quality, demand</div><div><b>CHE110</b>LPU environmental project</div></div>
+  </div>
+  <div class="globe-hint">Drag the globe · hover India</div>
+  <div class="scroll-cue" aria-hidden="true">Scroll<i></i></div>
+</section>
+
+<!-- CRISIS CONTEXT -->
+<section class="crisis" aria-label="Why it matters">
+  <div class="wrap crisis-grid">
+    <div class="reveal">
+      <div class="kicker">Why this matters</div>
+      <h2>Groundwater is India's hidden water supply, and it's being drawn down faster than rain can refill it.</h2>
+    </div>
+    <div class="reveal">
+      <p class="lede">Most Indian cities lean on groundwater when piped supply falls short. When extraction keeps outpacing recharge, water tables drop, borewells go deeper, and water quality can worsen.</p>
+      <div class="stats">
+        <div class="stat"><b data-count="18">0</b><span>% of the world's population lives in India</span><cite>NITI Aayog, CWMI 2018</cite></div>
+        <div class="stat"><b data-count="4">0</b><span>% of the world's freshwater resources</span><cite>NITI Aayog, CWMI 2018</cite></div>
+        <div class="stat"><b data-count="135">0</b><span>litres per person per day: urban supply benchmark</span><cite>CPHEEO Manual</cite></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MAP -->
+<section id="map" aria-label="Interactive India water-stress map">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="reveal"><div class="kicker">National map</div><h2>India water-stress map</h2><p class="lede">Rotate and zoom the terrain, switch indicators, filter by region or category, and select a city to open its intelligence panel.</p></div>
+      <div class="reveal" style="max-width:360px; font-size:.85rem"><span class="demo">DEMO DATA</span><p class="mute" style="margin-top:8px">City values here are clearly-labelled demonstration data for the prototype. Official categories are issued per assessment unit (block/mandal/taluk), not per city — check INGRES before citing.</p></div>
+    </div>
+    <div class="map-shell reveal">
+      <aside class="map-rail" aria-label="Map controls">
+        <div>
+          <h4>Indicator</h4>
+          <div class="seg" id="indicatorSeg" role="group" aria-label="Indicator">
+            <button data-ind="gw" aria-pressed="true">Groundwater assessment<small>Category + depth to water</small></button>
+            <button data-ind="trend" aria-pressed="false">Groundwater trend<small>Decline over 10 years</small></button>
+            <button data-ind="rain" aria-pressed="false">Rainfall<small>Approx. annual normal</small></button>
+            <button data-ind="gap" aria-pressed="false">Demand vs supply<small>Shortfall, where available</small></button>
+          </div>
+        </div>
+        <div>
+          <h4>Layers</h4>
+          <label class="toggle">Indicator columns<input type="checkbox" data-layer="cols" checked></label>
+          <label class="toggle">Rainfall rings<input type="checkbox" data-layer="rings"></label>
+          <label class="toggle">Water-quality flags<input type="checkbox" data-layer="quality"></label>
+          <label class="toggle">City labels<input type="checkbox" data-layer="labels" checked></label>
+          <label class="toggle">Terrain grid<input type="checkbox" data-layer="grid" checked></label>
+        </div>
+        <div>
+          <h4>Filter by region</h4>
+          <select id="fRegion" aria-label="Filter by region"><option value="all">All regions</option><option>North</option><option>South</option><option>West</option><option>East</option></select>
+        </div>
+        <div>
+          <h4>Filter by category</h4>
+          <select id="fCat" aria-label="Filter by category"><option value="all">All categories</option><option>Safe</option><option>Semi-critical</option><option>Critical</option><option>Over-exploited</option></select>
+        </div>
+      </aside>
+      <div class="map-stage">
+        <div id="map-canvas"></div>
+        <div class="map-labels" id="mapLabels"></div>
+        <div class="map-tools"><button id="zIn" aria-label="Zoom in">+</button><button id="zOut" aria-label="Zoom out">−</button><button id="zReset" aria-label="Reset view">⟲</button></div>
+        <div class="map-legend" id="legend" aria-live="polite"></div>
+        <div class="map-source" id="mapSource"></div>
+      </div>
+      <aside class="panel" id="cityPanel" aria-live="polite"></aside>
+    </div>
+  </div>
+</section>
+
+<!-- CITIES -->
+<section id="cities" aria-label="City intelligence profiles">
+  <div class="wrap">
+    <div class="kicker reveal">City intelligence</div>
+    <div class="city-tabs" role="tablist" id="cityTabs" aria-label="Choose a city"></div>
+    <div id="cityProfile" class="city-fade"></div>
+  </div>
+</section>
+
+<!-- SCIENCE -->
+<section id="science" aria-label="Groundwater cutaway simulation">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="reveal"><div class="kicker">How scarcity builds up</div><h2>Inside the ground beneath a city</h2><p class="lede">Step through the six stages, or take the controls. Pump harder or cut recharge and watch the water table fall and a cone of depression form around the well.</p></div>
+    </div>
+    <div class="cut-shell reveal">
+      <div class="cut-stage">
+        <div id="cut-canvas"></div>
+        <div class="hotspots" id="hotspots"></div>
+        <div class="cut-flag">Educational simulation — not a calibrated hydrological model</div>
+      </div>
+      <div class="cut-ctrl">
+        <div>
+          <div class="stages" role="group" aria-label="Process stage" id="stages"></div>
+          <div style="display:flex; gap:8px; margin-top:10px"><button class="btn sm" id="playStages">Play sequence</button><button class="btn sm" id="resetSim">Reset</button></div>
+        </div>
+        <div class="stage-text" id="stageText" aria-live="polite"></div>
+        <div class="range"><label for="rExt">Groundwater extraction <output id="oExt">40%</output></label><input type="range" id="rExt" min="0" max="100" value="40"></div>
+        <div class="range"><label for="rRec">Rainfall &amp; recharge <output id="oRec">60%</output></label><input type="range" id="rRec" min="0" max="100" value="60"></div>
+        <div class="gauge"><div style="display:flex;justify-content:space-between;font-size:.85rem"><span>Conceptual aquifer storage</span><b id="storeOut">—</b></div><div class="bar"><i id="storeBar"></i></div><p class="note" style="margin:8px 0 0">Relative, unit-less indicator for teaching only.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SOLUTIONS -->
+<section id="solutions" aria-label="Solutions">
+  <div class="wrap">
+    <div class="sec-head"><div class="reveal"><div class="kicker">Solutions</div><h2>What cities can do</h2><p class="lede">No single fix closes the gap. Cities that cope best combine recharge, reuse, restored water bodies and lower demand.</p></div></div>
+    <div class="sol-grid" id="solGrid"></div>
+
+    <div class="tools">
+      <div class="tool reveal" id="calc">
+        <h3>Rainwater harvesting calculator</h3>
+        <p class="mute" style="margin:0">Estimate how much rain a roof could collect in a year.</p>
+        <div class="formula">V = A × R × C ÷ 1000</div>
+        <div class="field"><label for="cA">Roof area, A (m²)</label><input type="number" id="cA" value="100" min="1" step="1" inputmode="decimal"></div>
+        <div class="field-row">
+          <div class="field"><label for="cR">Annual rainfall, R (mm)</label><input type="number" id="cR" value="740" min="1" step="1" inputmode="decimal"></div>
+          <div class="field"><label for="cCity">Use a city's approx. normal</label><select id="cCity"><option value="">Choose city</option></select></div>
+        </div>
+        <div class="field"><label for="cC">Runoff coefficient, C</label><select id="cC"><option value="0.9">0.90 — metal / GI sheet roof</option><option value="0.8" selected>0.80 — concrete (RCC) roof</option><option value="0.75">0.75 — tiled roof</option><option value="0.6">0.60 — paved ground</option><option value="0.15">0.15 — lawn / garden</option></select></div>
+        <div class="err" id="cErr" role="alert"></div>
+        <div class="result" aria-live="polite">
+          <div class="two"><div><span class="mute" style="font-size:.85rem">Volume per year</span><b id="cM3">—</b><span class="mute">cubic metres</span></div><div><span class="mute" style="font-size:.85rem">That's about</span><b id="cL">—</b><span class="mute">litres per year</span></div></div>
+          <p class="note">Theoretical maximum. Actual yield is lower because of first-flush diversion, gutter and filter losses, evaporation, how rain is spread across the year, and storage tank size.</p>
+        </div>
+      </div>
+      <div class="tool reveal" id="scenario">
+        <h3>Hypothetical city scenario</h3>
+        <p class="mute" style="margin:0">Change the assumptions to see what share of a city's demand rooftop harvesting could offset in principle.</p>
+        <div class="field-row">
+          <div class="field"><label for="sPop">Population (lakh)</label><input type="number" id="sPop" value="20" min="0.1" step="0.5"></div>
+          <div class="field"><label for="sLpcd">Demand (L/person/day)</label><input type="number" id="sLpcd" value="135" min="20" step="5"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label for="sRain">Annual rainfall (mm)</label><input type="number" id="sRain" value="800" min="50" step="10"></div>
+          <div class="field"><label for="sRoof">Avg roof per household (m²)</label><input type="number" id="sRoof" value="60" min="5" step="5"></div>
+        </div>
+        <div class="range field"><label for="sShare">Households harvesting <output id="oShare">30%</output></label><input type="range" id="sShare" min="0" max="100" value="30"></div>
+        <div class="err" id="sErr" role="alert"></div>
+        <div class="result" aria-live="polite">
+          <div class="two"><div><span class="mute" style="font-size:.85rem">Annual demand</span><b id="sDem" style="font-size:1.8rem">—</b></div><div><span class="mute" style="font-size:.85rem">Harvest potential</span><b id="sHar" style="font-size:1.8rem">—</b></div></div>
+          <div style="margin-top:16px; display:flex; justify-content:space-between"><span>Share of demand offset</span><b id="sPct" style="font-size:1.3rem; display:inline">—</b></div>
+          <div class="meter"><i id="sMeter"></i></div>
+          <p class="note">Hypothetical scenario, not a forecast. Assumes 5 persons per household and C = 0.8. 135 L/person/day is the CPHEEO benchmark for cities with sewerage.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section id="compare" aria-label="City comparison">
+  <div class="wrap">
+    <div class="sec-head"><div class="reveal"><div class="kicker">Compare</div><h2>Two cities, side by side</h2><p class="lede">Values are shown as recorded, with their units and years. There's no combined score or ranking — different indicators can't be fairly squashed into one number.</p></div></div>
+    <div class="cmp-pick reveal"><select id="cmpA" aria-label="First city"></select><span class="vs">and</span><select id="cmpB" aria-label="Second city"></select></div>
+    <div class="tbl-wrap reveal"><table id="cmpTable"></table></div>
+    <div class="cmp-charts reveal">
+      <div class="chart-card"><header><h4>Depth to groundwater (m below ground)</h4><span class="demo">DEMO</span></header><div class="chart-box"><canvas id="cmpGw"></canvas></div><p class="src">Same years for both series (2015–2024). Deeper = further down the chart.</p></div>
+      <div class="chart-card"><header><h4>Annual rainfall (mm)</h4><span class="demo">DEMO</span></header><div class="chart-box"><canvas id="cmpRain"></canvas></div><p class="src">Demonstration series built around approximate IMD normals.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- LEARN -->
+<section id="learn" aria-label="Learning modules">
+  <div class="wrap">
+    <div class="sec-head"><div class="reveal"><div class="kicker">CHE110 learning modules</div><h2>The science, one idea at a time</h2><p class="lede">Each module has a short explanation, more detail if you want it, and a one-question check.</p></div></div>
+    <div class="learn-grid" id="learnGrid"></div>
+  </div>
+</section>
+
+<!-- ABOUT / METHODOLOGY -->
+<section id="about" aria-label="Data sources and methodology">
+  <div class="wrap">
+    <div class="sec-head"><div class="reveal"><div class="kicker">Methodology</div><h2>Data sources and method</h2><p class="lede">What this prototype shows, where the real numbers come from, and how to replace demonstration values with official data.</p></div></div>
+    <div class="distinct reveal">
+      <div><b>Availability</b><p>How much groundwater is recharged each year and can be extracted (CGWB/INGRES, in ham or bcm).</p></div>
+      <div><b>Extraction</b><p>How much is pumped compared with what's available — the "stage of extraction" that sets Safe → Over-exploited.</p></div>
+      <div><b>Quality</b><p>Whether water meets BIS IS 10500 limits (fluoride, nitrate, arsenic, salinity, etc.). Plenty of water can still be unsafe.</p></div>
+      <div><b>Supply shortage</b><p>A municipal gap between demand and piped supply. A city can face shortages even where aquifers are healthy.</p></div>
+    </div>
+    <div class="method-grid reveal">
+      <div><h4>How groundwater categories work</h4><p>CGWB and state departments assess each assessment unit (block, mandal or taluk). The stage of extraction is annual extraction ÷ annual extractable resource × 100. Units are classed Safe (≤70%), Semi-critical (70–90%), Critical (90–100%) or Over-exploited (&gt;100%), with water-level trends also considered. Cities often span several units, so a single "city category" is a simplification.</p></div>
+      <div><h4>What's demonstration data here</h4><p>Every number tagged <span class="demo">DEMO</span> is a placeholder for the prototype: city categories, depth-to-water series, rainfall series and demand–supply gaps. The sourced statistics in the "Why this matters" strip and the 135 L/person/day benchmark are real. Nothing on this page is live data.</p></div>
+      <div><h4>Replacing demo data</h4><p>All values sit in one <code>CITIES</code> data object in the page script. Download unit-wise results from INGRES, water-level observations from India-WRIS, and district rainfall from IMD; then update each city's <code>gw</code>, <code>rain</code>, <code>cat</code> and <code>source</code> fields with the year and geographic unit.</p></div>
+      <div><h4>Limitations</h4><p>The India outline is a simplified schematic, not a survey boundary. Water-quality notes are qualitative context, not measured values. The 3D cutaway is a conceptual teaching model. The globe is stylised rather than a satellite texture.</p></div>
+    </div>
+    <h3 class="reveal" style="margin-bottom:16px">Source register</h3>
+    <div class="tbl-wrap reveal"><table>
+      <thead><tr><th>Dataset</th><th>Publisher</th><th>Year</th><th>Geographic unit</th><th>Units</th><th>Limitations</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://ingres.iith.ac.in/" target="_blank" rel="noopener">Dynamic Ground Water Resources assessment (INGRES)</a></td><td>CGWB &amp; State Ground Water Depts., hosted by IIT Hyderabad</td><td>Annual (latest available)</td><td>Assessment unit (block/mandal/taluk), district, state</td><td>ham, bcm, % stage of extraction</td><td>Estimates, not direct measurement; unit boundaries ≠ city limits</td></tr>
+        <tr><td><a href="https://cgwb.gov.in/" target="_blank" rel="noopener">Ground water level monitoring &amp; quality reports</a></td><td>Central Ground Water Board</td><td>Pre-/post-monsoon, yearly</td><td>Monitoring wells</td><td>m below ground level; mg/L</td><td>Point observations; uneven well density</td></tr>
+        <tr><td><a href="https://indiawris.gov.in/" target="_blank" rel="noopener">India-WRIS water resources portal</a></td><td>Ministry of Jal Shakti / NWIC</td><td>Varies by layer</td><td>Station, basin, district</td><td>Varies</td><td>Some layers need registration; check terms of use</td></tr>
+        <tr><td><a href="https://mausam.imd.gov.in/" target="_blank" rel="noopener">Rainfall statistics &amp; normals</a></td><td>India Meteorological Department</td><td>Normals (long-period averages); annual reports</td><td>Station, district, subdivision</td><td>mm</td><td>Station normals differ from district values</td></tr>
+        <tr><td>Composite Water Management Index (2018)</td><td>NITI Aayog</td><td>2018</td><td>National / state</td><td>% shares</td><td>Used only for the population/freshwater context figures</td></tr>
+        <tr><td>Manual on Water Supply and Treatment</td><td>CPHEEO, MoHUA</td><td>1999 (benchmark still referenced)</td><td>Urban service norm</td><td>L/person/day</td><td>Normative benchmark, not observed consumption</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div><a href="#home" class="logo" style="margin-bottom:10px">AquaWatch India</a><p style="max-width:46ch">Mapping water stress. Protecting tomorrow. A CHE110 project at Lovely Professional University on digital mapping of water-scarcity hotspots in Indian cities.</p></div>
+    <div><p>Prototype with demonstration data — not for policy or engineering decisions.<br>Official data: <a href="https://cgwb.gov.in/" target="_blank" rel="noopener">CGWB</a>, <a href="https://ingres.iith.ac.in/" target="_blank" rel="noopener">INGRES</a>, <a href="https://mausam.imd.gov.in/" target="_blank" rel="noopener">IMD</a>, <a href="https://indiawris.gov.in/" target="_blank" rel="noopener">India-WRIS</a>.</p></div>
+  </div>
+</footer>
+<button id="top" aria-label="Back to top"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 13V3M3 8l5-5 5 5" stroke="#28D9F2" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script>
+(function(){
+"use strict";
+/* ================= CONFIG ================= */
+var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var MOBILE = window.matchMedia('(max-width: 860px)').matches;
+var COLORS = {cyan:0x28D9F2, blue:0x168BFF, white:0xF2F8FC, amber:0xF2B544, coral:0xFF7A66, deep:0x09263A, ink:0x06111D};
+var CAT = {"Safe":"#28D9F2","Semi-critical":"#7FB8FF","Critical":"#F2B544","Over-exploited":"#FF7A66"};
+var YEARS = [2015,2016,2017,2018,2019,2020,2021,2022,2023,2024];
+var HAS3D = !!window.THREE && (function(){try{var c=document.createElement('canvas');return !!(c.getContext('webgl2')||c.getContext('webgl'));}catch(e){return false;}})();
+
+/* Simplified schematic outline of India (lon, lat) — not a survey boundary */
+var INDIA = [[73.8,36.8],[75.9,36.6],[77.8,35.5],[80.2,35.4],[79.4,32.5],[78.8,31.4],[80.1,30.6],[81.1,30.0],[80.1,28.8],[83.3,27.3],[85.0,26.7],[86.7,26.4],[88.1,26.4],[88.1,27.9],[88.8,27.3],[89.8,26.7],[92.1,26.8],[92.0,27.8],[94.0,28.9],[95.5,29.3],[97.2,28.2],[97.4,27.0],[96.0,27.2],[95.2,26.0],[94.6,25.0],[94.2,23.8],[93.3,23.0],[93.2,22.0],[92.6,21.9],[92.3,23.7],[91.6,24.2],[91.2,23.5],[91.8,24.9],[90.0,25.2],[89.8,25.9],[88.6,26.3],[88.2,25.0],[88.7,24.3],[88.9,22.9],[89.1,21.7],[88.2,21.6],[87.0,21.5],[86.7,20.4],[85.0,19.3],[84.0,18.2],[82.3,16.6],[81.2,16.0],[80.3,15.5],[80.36,13.6],[80.33,12.6],[79.9,10.3],[79.3,10.3],[78.9,9.2],[77.5,8.1],[76.6,8.9],[76.0,10.3],[75.4,11.8],[74.8,12.9],[74.3,14.5],[73.5,16.0],[73.0,18.0],[72.8,19.0],[72.9,20.5],[72.6,21.4],[72.5,22.3],[72.1,21.3],[71.0,20.8],[70.0,21.5],[69.0,22.3],[70.2,22.9],[68.6,23.3],[68.2,23.9],[69.5,24.3],[71.0,24.4],[70.4,25.7],[70.0,27.0],[71.9,27.9],[73.4,29.9],[74.6,31.0],[74.5,32.0],[74.0,33.0],[73.4,33.6],[73.6,35.0],[73.0,36.0]];
+
+/* ================= DATA (DEMO where tagged) ================= */
+function series(base, slope, amp, seed){var o=[],s=seed;for(var i=0;i<10;i++){s=(s*9301+49297)%233280;var n=(s/233280-.5)*amp;o.push(+(base+slope*i+n).toFixed(1));}return o;}
+var CITIES = [
+ {id:"delhi",name:"Delhi",state:"National Capital Territory",region:"North",lon:77.21,lat:28.61,cat:"Over-exploited",gwBase:18,gwSlope:.45,rainN:774,gap:25,
+  context:"Spread across the Yamuna floodplain and the Delhi ridge, with alluvial aquifers in the north and harder rock to the south.",
+  quality:"Exceedances of fluoride, nitrate and salinity have been reported at some monitoring locations (CGWB quality reports). Verify per location.",
+  pressures:["Heavy reliance on private borewells where piped supply is short","Paved surfaces reduce natural recharge","Dependence on water brought from outside the territory"],
+  fixes:["Mandatory rooftop harvesting with working recharge pits","Yamuna floodplain recharge and lake revival","Treated wastewater for parks, construction and industry"]},
+ {id:"bengaluru",name:"Bengaluru",state:"Karnataka",region:"South",lon:77.59,lat:12.97,cat:"Over-exploited",gwBase:26,gwSlope:.6,rainN:970,gap:30,
+  context:"On the Deccan plateau in hard-rock terrain, where groundwater sits in weathered and fractured zones with limited storage.",
+  quality:"Data unavailable in this prototype.",
+  pressures:["Rapid outward growth beyond the piped network","Loss and encroachment of historic tanks (lakes)","Hard-rock aquifers store relatively little water"],
+  fixes:["Restore interconnected lake (kere) chains","Recharge wells in residential layouts","Expand secondary-treated water reuse"]},
+ {id:"chennai",name:"Chennai",state:"Tamil Nadu",region:"South",lon:80.27,lat:13.08,cat:"Critical",gwBase:7,gwSlope:.25,rainN:1400,gap:35,
+  context:"A flat coastal city that gets most of its rain from the northeast monsoon and depends heavily on reservoirs and desalination.",
+  quality:"Seawater intrusion into coastal aquifers has been reported. Verify against CGWB/TWAD data.",
+  pressures:["Rainfall concentrated in a few months","Reservoirs that can run low after a weak monsoon (widely reported in 2019)","Saline intrusion near the coast"],
+  fixes:["Enforce and maintain rooftop harvesting structures","Restore wetlands such as Pallikaranai","Desalination combined with demand management"]},
+ {id:"jaipur",name:"Jaipur",state:"Rajasthan",region:"North",lon:75.79,lat:26.91,cat:"Over-exploited",gwBase:32,gwSlope:.8,rainN:600,gap:30,
+  context:"A semi-arid city with low, variable rainfall and deep water tables.",
+  quality:"Fluoride and nitrate above BIS limits reported in parts of Jaipur district. Verify per location.",
+  pressures:["Low rainfall and high evaporation","Deep and falling water tables","Long-distance water transfers"],
+  fixes:["Revive traditional structures such as baoris and johads","Recharge shafts along drainage lines","Leak reduction in distribution"]},
+ {id:"hyderabad",name:"Hyderabad",state:"Telangana",region:"South",lon:78.49,lat:17.39,cat:"Semi-critical",gwBase:10,gwSlope:.3,rainN:810,gap:20,
+  context:"Granite terrain on the Deccan plateau, supplied by rivers piped in from distant sources and by groundwater.",
+  quality:"Data unavailable in this prototype.",
+  pressures:["Limited storage in granite aquifers","Shrinking lakes and storm channels","Fast-growing peri-urban areas"],
+  fixes:["Lake restoration and inflow channel clearing","Recharge pits in new layouts","Reuse of treated sewage"]},
+ {id:"ahmedabad",name:"Ahmedabad",state:"Gujarat",region:"West",lon:72.57,lat:23.02,cat:"Over-exploited",gwBase:38,gwSlope:.5,rainN:780,gap:15,
+  context:"On alluvial plains beside the Sabarmati, with a long history of deep groundwater pumping, now supplemented by Narmada canal water.",
+  quality:"Data unavailable in this prototype.",
+  pressures:["Legacy of deep aquifer over-pumping","Industrial demand","Semi-arid climate"],
+  fixes:["Shift supply further to surface water","Industrial water reuse","Managed aquifer recharge"]},
+ {id:"mumbai",name:"Mumbai",state:"Maharashtra",region:"West",lon:72.88,lat:19.08,cat:"Safe",gwBase:4,gwSlope:.05,rainN:2300,gap:15,
+  context:"A coastal island city with very high monsoon rainfall, supplied mostly by lakes and dams outside the city.",
+  quality:"Data unavailable in this prototype.",
+  pressures:["Almost all rain falls in four months","Supply depends on distant reservoirs","Distribution losses and unequal access"],
+  fixes:["Large-scale harvesting in housing societies","Leakage reduction","Protect catchments of supply lakes"]},
+ {id:"kolkata",name:"Kolkata",state:"West Bengal",region:"East",lon:88.36,lat:22.57,cat:"Semi-critical",gwBase:9,gwSlope:.2,rainN:1580,gap:null,
+  context:"On the Hooghly in the Bengal delta, over thick alluvial aquifers, next to the East Kolkata Wetlands.",
+  quality:"Arsenic occurrence has been reported in parts of the surrounding delta districts. Verify per location.",
+  pressures:["Groundwater pumping in areas without piped supply","Land subsidence concerns where water tables fall","Pressure on wetlands"],
+  fixes:["Protect the East Kolkata Wetlands","Expand treated surface-water supply","Monitor arsenic in groundwater"]},
+ {id:"ludhiana",name:"Ludhiana",state:"Punjab",region:"North",lon:75.86,lat:30.90,cat:"Over-exploited",gwBase:28,gwSlope:.9,rainN:740,gap:null,
+  context:"An industrial city in Punjab's alluvial plains, where irrigated farming and industry both draw heavily on groundwater.",
+  quality:"Industrial pollution of the Buddha Nullah is widely documented; nitrate and other contaminants reported in parts of the district. Verify per location.",
+  pressures:["Paddy irrigation drawing on aquifers across Punjab","Industrial demand and effluent","Falling water tables reported across the state"],
+  fixes:["Crop diversification and direct-seeded rice","Treat industrial effluent before discharge","Recharge through village ponds and drains"]}
+];
+CITIES.forEach(function(c,i){
+  c.gw = series(c.gwBase, c.gwSlope, 1.6, 17+i*31);
+  c.rain = YEARS.map(function(y,j){var s=(i*97+j*53)%100/100; return Math.round(c.rainN*(0.72+s*0.56));});
+  c.decline = +(c.gw[9]-c.gw[0]).toFixed(1);
+});
+var byId = {}; CITIES.forEach(function(c){byId[c.id]=c;});
+var IND_INFO = {
+  gw:{label:"Depth to water (m bgl)", src:"DEMO values for 2024 · Real source: CGWB monitoring wells / INGRES unit categories", unit:"m"},
+  trend:{label:"10-yr fall in water table (m)", src:"DEMO series 2015–2024 · Real source: CGWB pre-/post-monsoon water levels", unit:"m"},
+  rain:{label:"Approx. annual rainfall normal (mm)", src:"Approximate normals, demonstration · Real source: IMD station/district normals", unit:"mm"},
+  gap:{label:"Demand–supply shortfall (%)", src:"DEMO values · Real source: municipal utilities / CPHEEO service-level benchmarks", unit:"%"}
+};
+function valueFor(c, ind){ if(ind==="gw")return c.gw[9]; if(ind==="trend")return c.decline; if(ind==="rain")return c.rainN; return c.gap; }
+function fmt(v,u){ return v==null ? '<span class="na">Data unavailable</span>' : (u==="mm"? v.toLocaleString('en-IN') : v)+" "+u; }
+function catHTML(c){ return '<span class="cat"><i style="background:'+CAT[c]+'"></i>'+c+'</span>'; }
+
+/* ================= UTIL ================= */
+function $(s,r){return (r||document).querySelector(s);} function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));}
+function pip(pt, poly){var x=pt[0],y=pt[1],ins=false;for(var i=0,j=poly.length-1;i<poly.length;j=i++){var xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))ins=!ins;}return ins;}
+function onVisible(el, cb){ var io=new IntersectionObserver(function(es){es.forEach(function(e){cb(e.isIntersecting);});},{rootMargin:"120px"}); io.observe(el); }
+var tabHidden=false; document.addEventListener('visibilitychange',function(){tabHidden=document.hidden;});
+
+/* topographic background */
+(function(){var svg=$('#topo'),w=1600,h=1000,html='';svg.setAttribute('viewBox','0 0 '+w+' '+h);
+ for(var k=0;k<14;k++){var d='',cx=1150,cy=300,r=60+k*55;for(var a=0;a<=64;a++){var t=a/64*Math.PI*2,rr=r*(1+0.12*Math.sin(t*3+k*.7)+0.06*Math.sin(t*5-k));d+=(a?'L':'M')+(cx+Math.cos(t)*rr*1.3).toFixed(1)+' '+(cy+Math.sin(t)*rr).toFixed(1);}html+='<path d="'+d+'Z" fill="none" stroke="#28D9F2" stroke-width="0.6" opacity="'+(0.5-k*0.03)+'"/>';}
+ for(k=0;k<9;k++){d='';cx=250;cy=820;r=40+k*60;for(a=0;a<=64;a++){t=a/64*Math.PI*2;rr=r*(1+0.15*Math.sin(t*4+k));d+=(a?'L':'M')+(cx+Math.cos(t)*rr*1.4).toFixed(1)+' '+(cy+Math.sin(t)*rr).toFixed(1);}html+='<path d="'+d+'Z" fill="none" stroke="#168BFF" stroke-width="0.6" opacity="'+(0.4-k*0.04)+'"/>';}
+ svg.innerHTML=html;})();
+
+/* ================= NAV / CHROME ================= */
+var nav=$('#nav'), prog=$('#progress'), topBtn=$('#top');
+window.addEventListener('scroll',function(){var y=window.scrollY,h=document.documentElement.scrollHeight-innerHeight;nav.classList.toggle('scrolled',y>30);prog.style.width=(h>0?y/h*100:0)+'%';topBtn.classList.toggle('show',y>innerHeight);},{passive:true});
+topBtn.addEventListener('click',function(){window.scrollTo({top:0,behavior:REDUCED?'auto':'smooth'});});
+var menuBtn=$('#menuBtn'),navList=$('#navList');
+menuBtn.addEventListener('click',function(){var o=navList.classList.toggle('open');menuBtn.setAttribute('aria-expanded',o);});
+$$('#navList a').forEach(function(a){a.addEventListener('click',function(){navList.classList.remove('open');menuBtn.setAttribute('aria-expanded','false');});});
+var secIds=['home','map','cities','solutions','learn','about'];
+var secIO=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){$$('#navList a').forEach(function(a){a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id);});}});},{rootMargin:'-45% 0px -50% 0px'});
+secIds.forEach(function(id){secIO.observe(document.getElementById(id));});
+/* magnetic buttons */
+if(!REDUCED && !MOBILE){$$('.mag').forEach(function(b){b.addEventListener('mousemove',function(e){var r=b.getBoundingClientRect();b.style.transform='translate('+((e.clientX-r.left-r.width/2)*.15)+'px,'+((e.clientY-r.top-r.height/2)*.25)+'px)';});b.addEventListener('mouseleave',function(){b.style.transform='';});});}
+
+/* ================= HERO GLOBE ================= */
+var globe = null;
+function latLonToV(lat, lon, r){var la=lat*Math.PI/180, lo=lon*Math.PI/180;return new THREE.Vector3(r*Math.cos(la)*Math.sin(lo), r*Math.sin(la), r*Math.cos(la)*Math.cos(lo));}
+function initGlobe(){
+  var host=$('#globe-wrap'); if(!HAS3D){host.innerHTML='<div class="nogl">3D view needs WebGL. Everything else on the page still works.</div>';return;}
+  var renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,MOBILE?1.5:1.75)); host.appendChild(renderer.domElement);
+  var scene=new THREE.Scene(), camera=new THREE.PerspectiveCamera(35,1,0.1,100); camera.position.set(0,0,4.4);
+  var controls=new THREE.OrbitControls(camera,renderer.domElement); controls.enableZoom=false; controls.enablePan=false; controls.enableDamping=true; controls.dampingFactor=.06; controls.rotateSpeed=.5; controls.minPolarAngle=Math.PI*.25; controls.maxPolarAngle=Math.PI*.75; controls.autoRotate=false; controls.autoRotateSpeed=.35;
+  renderer.domElement.addEventListener('touchstart',function(){},{passive:true});
+  var root=new THREE.Group(); scene.add(root);
+  var tilt=new THREE.Group(); root.add(tilt); var spin=new THREE.Group(); tilt.add(spin);
+  // ocean/data sphere
+  var earthMat=new THREE.ShaderMaterial({uniforms:{uTime:{value:0}},
+   vertexShader:"varying vec3 vN;varying vec3 vP;varying vec3 vW;void main(){vP=position;vN=normalize(normalMatrix*normal);vec4 w=modelViewMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*w;}",
+   fragmentShader:"uniform float uTime;varying vec3 vN;varying vec3 vP;varying vec3 vW;\n#define PI 3.14159265\nvoid main(){vec3 p=normalize(vP);float lat=asin(p.y);float lon=atan(p.x,p.z);float g=15.*PI/180.;float la=abs(fract(lat/g+.5)-.5);float lo=abs(fract(lon/g+.5)-.5)*cos(lat);float grid=(1.-smoothstep(.0,.018,la))+(1.-smoothstep(.0,.018,lo));vec3 V=normalize(-vW);float fr=pow(1.-max(dot(vN,V),0.),2.5);float light=.55+.45*max(dot(vN,normalize(vec3(-.4,.5,.8))),0.);vec3 base=mix(vec3(.02,.09,.16),vec3(.04,.20,.32),light);float c=sin(p.x*18.+uTime*.6)*sin(p.y*22.-uTime*.4)*sin(p.z*16.+uTime*.5);base+=vec3(.0,.08,.12)*smoothstep(.55,1.,c)*.6;base+=vec3(.16,.85,.95)*grid*.18;base+=vec3(.16,.85,.95)*fr*.75;gl_FragColor=vec4(base,1.);}"});
+  var earth=new THREE.Mesh(new THREE.SphereGeometry(1,MOBILE?64:96,MOBILE?64:96),earthMat); spin.add(earth);
+  // clouds
+  var cloudMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uTime:{value:0}},
+   vertexShader:"varying vec3 vP;void main(){vP=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
+   fragmentShader:"uniform float uTime;varying vec3 vP;float h(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}float n(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(h(i),h(i+vec3(1,0,0)),f.x),mix(h(i+vec3(0,1,0)),h(i+vec3(1,1,0)),f.x),f.y),mix(mix(h(i+vec3(0,0,1)),h(i+vec3(1,0,1)),f.x),mix(h(i+vec3(0,1,1)),h(i+vec3(1,1,1)),f.x),f.y),f.z);}void main(){vec3 p=normalize(vP)*3.+vec3(uTime*.02,0.,uTime*.01);float f=n(p)*.55+n(p*2.1)*.3+n(p*4.3)*.15;float a=smoothstep(.58,.8,f)*.28;gl_FragColor=vec4(vec3(.9,.97,1.),a);}"});
+  var clouds=new THREE.Mesh(new THREE.SphereGeometry(1.025,64,64),cloudMat); spin.add(clouds);
+  // atmosphere
+  var atm=new THREE.Mesh(new THREE.SphereGeometry(1.18,64,64),new THREE.ShaderMaterial({side:THREE.BackSide,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,
+   vertexShader:"varying vec3 vN;void main(){vN=normalize(normalMatrix*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
+   fragmentShader:"varying vec3 vN;void main(){float i=pow(.72-dot(vN,vec3(0.,0.,1.)),3.);gl_FragColor=vec4(.16,.6,1.,1.)*i*1.4;}"}));
+  root.add(atm);
+  // India dots
+  var ip=[]; for(var lo=68;lo<=97.5;lo+=.42){for(var la=6.5;la<=37;la+=.42){if(pip([lo,la],INDIA)){var v=latLonToV(la,lo,1.006);ip.push(v.x,v.y,v.z);}}}
+  var iGeo=new THREE.BufferGeometry(); iGeo.setAttribute('position',new THREE.Float32BufferAttribute(ip,3));
+  var iMat=new THREE.PointsMaterial({color:COLORS.cyan,size:.012,transparent:true,opacity:.75,blending:THREE.AdditiveBlending,depthWrite:false});
+  var iPts=new THREE.Points(iGeo,iMat); spin.add(iPts);
+  var outline=INDIA.map(function(p){return latLonToV(p[1],p[0],1.008);}); outline.push(outline[0]);
+  var oLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(outline),new THREE.LineBasicMaterial({color:COLORS.cyan,transparent:true,opacity:.9})); spin.add(oLine);
+  // city markers + arcs
+  var delhi=byId.delhi, arcs=[], runners=[];
+  CITIES.forEach(function(c){
+    var m=new THREE.Mesh(new THREE.SphereGeometry(.011,12,12),new THREE.MeshBasicMaterial({color:c.cat==="Over-exploited"?COLORS.coral:c.cat==="Critical"?COLORS.amber:COLORS.cyan})); m.position.copy(latLonToV(c.lat,c.lon,1.01)); spin.add(m);
+    var halo=new THREE.Mesh(new THREE.RingGeometry(.016,.022,24),new THREE.MeshBasicMaterial({color:COLORS.cyan,transparent:true,opacity:.6,side:THREE.DoubleSide})); halo.position.copy(m.position); halo.lookAt(m.position.clone().multiplyScalar(2)); spin.add(halo); arcs.push({halo:halo});
+    if(c.id!=="delhi"){var a=latLonToV(delhi.lat,delhi.lon,1.01),b=latLonToV(c.lat,c.lon,1.01),mid=a.clone().add(b).multiplyScalar(.5),lift=1.01+a.distanceTo(b)*.45;mid.normalize().multiplyScalar(lift);
+      var curve=new THREE.QuadraticBezierCurve3(a,mid,b); var l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(48)),new THREE.LineBasicMaterial({color:COLORS.blue,transparent:true,opacity:.45})); spin.add(l);
+      var r=new THREE.Mesh(new THREE.SphereGeometry(.006,8,8),new THREE.MeshBasicMaterial({color:COLORS.white})); spin.add(r); runners.push({mesh:r,curve:curve,off:Math.random()});}
+  });
+  // particle shell + orbit ring
+  var pc=MOBILE?500:1400,pp=[];for(var i=0;i<pc;i++){var u=Math.random()*2-1,t=Math.random()*Math.PI*2,rr=1.3+Math.random()*1.4,s=Math.sqrt(1-u*u);pp.push(rr*s*Math.cos(t),rr*u*.6,rr*s*Math.sin(t));}
+  var pGeo=new THREE.BufferGeometry();pGeo.setAttribute('position',new THREE.Float32BufferAttribute(pp,3));
+  var parts=new THREE.Points(pGeo,new THREE.PointsMaterial({color:COLORS.cyan,size:.008,transparent:true,opacity:.5,depthWrite:false})); root.add(parts);
+  var ring=new THREE.Mesh(new THREE.TorusGeometry(1.45,.0018,8,180),new THREE.MeshBasicMaterial({color:COLORS.cyan,transparent:true,opacity:.35})); ring.rotation.set(1.25,.2,0); root.add(ring);
+  var ring2=new THREE.Mesh(new THREE.TorusGeometry(1.62,.0012,8,180),new THREE.MeshBasicMaterial({color:COLORS.blue,transparent:true,opacity:.25})); ring2.rotation.set(1.1,-.4,.3); root.add(ring2);
+  var sat=new THREE.Mesh(new THREE.SphereGeometry(.014,8,8),new THREE.MeshBasicMaterial({color:COLORS.white})); root.add(sat);
+  // India focus
+  var focusY=-80*Math.PI/180, focusX=22*Math.PI/180;
+  spin.rotation.y=REDUCED?focusY:focusY+2.2; tilt.rotation.x=REDUCED?focusX:0;
+  // hover India
+  var ray=new THREE.Raycaster(),mouse=new THREE.Vector2(),hoverIndia=false,mx=0,my=0;
+  renderer.domElement.addEventListener('pointermove',function(e){var r=renderer.domElement.getBoundingClientRect();mouse.x=(e.clientX-r.left)/r.width*2-1;mouse.y=-(e.clientY-r.top)/r.height*2+1;ray.setFromCamera(mouse,camera);var hit=ray.intersectObject(earth)[0];var on=false;if(hit){var p=spin.worldToLocal(hit.point.clone()).normalize();var lat=Math.asin(p.y)*180/Math.PI,lon=Math.atan2(p.x,p.z)*180/Math.PI;on=pip([lon,lat],INDIA);}if(on!==hoverIndia){hoverIndia=on;renderer.domElement.style.cursor=on?'pointer':'grab';if(window.gsap){gsap.to(iMat,{opacity:on?1:.75,size:on?.017:.012,duration:.4});}}});
+  renderer.domElement.addEventListener('click',function(){if(hoverIndia)$('#map').scrollIntoView({behavior:REDUCED?'auto':'smooth'});});
+  window.addEventListener('mousemove',function(e){mx=e.clientX/innerWidth-.5;my=e.clientY/innerHeight-.5;},{passive:true});
+  function resize(){var w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+  resize(); window.addEventListener('resize',resize);
+  var visible=true, clock=new THREE.Clock(); onVisible(host,function(v){visible=v;});
+  function loop(){requestAnimationFrame(loop); if(!visible||tabHidden)return; var t=clock.getElapsedTime();
+    earthMat.uniforms.uTime.value=t; cloudMat.uniforms.uTime.value=t; clouds.rotation.y=t*.01;
+    if(!REDUCED){parts.rotation.y=t*.02; ring.rotation.z=t*.05; root.position.x+=(mx*.12-root.position.x)*.04; root.position.y+=(-my*.08-root.position.y)*.04;
+      runners.forEach(function(r){r.mesh.position.copy(r.curve.getPoint((t*.25+r.off)%1));});
+      arcs.forEach(function(a,i){var s=1+((t*.6+i*.13)%1)*1.6;a.halo.scale.set(s,s,s);a.halo.material.opacity=.6*(1-((t*.6+i*.13)%1));});
+      sat.position.set(Math.cos(t*.3)*1.45,0,Math.sin(t*.3)*1.45).applyEuler(ring.rotation);}
+    controls.update(); renderer.render(scene,camera);}
+  loop();
+  globe={intro:function(){if(REDUCED){controls.autoRotate=false;return;}gsap.to(spin.rotation,{y:focusY,duration:3.2,ease:"power3.inOut"});gsap.to(tilt.rotation,{x:focusX,duration:3.2,ease:"power3.inOut",onComplete:function(){setTimeout(function(){controls.autoRotate=true;},2500);}});},
+         camera:camera,root:root};
+}
+
+/* ================= 3D INDIA MAP ================= */
+var mapApi=null, state={ind:"gw",sel:"ludhiana",region:"all",cat:"all",layers:{cols:true,rings:false,quality:false,labels:true,grid:true}};
+var S=.36; function mxz(lon,lat){return {x:(lon-82.5)*S,z:-(lat-22)*S};}
+function initMap(){
+  var host=$('#map-canvas'); if(!HAS3D){host.innerHTML='<div class="nogl">The 3D map needs WebGL. Use the city labels and panel instead — all data remains accessible.</div>';return;}
+  var renderer=new THREE.WebGLRenderer({antialias:true,alpha:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,1.75)); host.appendChild(renderer.domElement);
+  var scene=new THREE.Scene(); scene.fog=new THREE.Fog(COLORS.ink,18,40);
+  var camera=new THREE.PerspectiveCamera(40,1,.1,200); var home=new THREE.Vector3(0,12.5,11.5); camera.position.copy(home);
+  var controls=new THREE.OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.maxPolarAngle=Math.PI*.44; controls.minDistance=5; controls.maxDistance=26; controls.target.set(0,0,-.3); controls.screenSpacePanning=false;
+  scene.add(new THREE.HemisphereLight(0x8fd8ff,0x06111d,.7)); var dl=new THREE.DirectionalLight(0xffffff,.9); dl.position.set(-6,10,6); scene.add(dl);
+  var pl=new THREE.PointLight(COLORS.cyan,.8,30); pl.position.set(0,5,0); scene.add(pl);
+  // landmass
+  var shape=new THREE.Shape(); INDIA.forEach(function(p,i){var q=mxz(p[0],p[1]); if(i)shape.lineTo(q.x,-q.z); else shape.moveTo(q.x,-q.z);});
+  var land=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:.32,bevelEnabled:true,bevelSize:.04,bevelThickness:.04,bevelSegments:2}),new THREE.MeshStandardMaterial({color:0x0c3550,roughness:.65,metalness:.2,emissive:0x041a2a}));
+  land.rotation.x=-Math.PI/2; land.position.y=-.32; scene.add(land);
+  var edge=new THREE.LineSegments(new THREE.EdgesGeometry(land.geometry,30),new THREE.LineBasicMaterial({color:COLORS.cyan,transparent:true,opacity:.7})); edge.rotation.copy(land.rotation); edge.position.copy(land.position); scene.add(edge);
+  // relief: dots on land with gentle height (stylised, not DEM)
+  var rp=[]; for(var lo=68.3;lo<97.5;lo+=.55){for(var la=7;la<37;la+=.55){if(pip([lo,la],INDIA)){var q=mxz(lo,la);var hgt=.04+(la>29?(la-29)*.05:0)+(lo<77&&la<21?.06:0)+Math.max(0,Math.sin(lo*.9)*Math.cos(la*.7))*.05;rp.push(q.x,hgt+.03,q.z);}}}
+  var rGeo=new THREE.BufferGeometry(); rGeo.setAttribute('position',new THREE.Float32BufferAttribute(rp,3));
+  var relief=new THREE.Points(rGeo,new THREE.PointsMaterial({color:COLORS.cyan,size:.035,transparent:true,opacity:.35})); scene.add(relief);
+  var grid=new THREE.GridHelper(40,80,0x123b55,0x0b2a40); grid.position.y=-.36; scene.add(grid);
+  // city objects
+  var objs={}, pickables=[], labelsHost=$('#mapLabels');
+  CITIES.forEach(function(c){
+    var q=mxz(c.lon,c.lat), g=new THREE.Group(); g.position.set(q.x,.02,q.z); scene.add(g);
+    var col=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,1,24),new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,emissiveIntensity:.35,transparent:true,opacity:.92}));
+    col.userData.id=c.id; g.add(col); pickables.push(col);
+    var base=new THREE.Mesh(new THREE.RingGeometry(.18,.24,32),new THREE.MeshBasicMaterial({color:COLORS.cyan,transparent:true,opacity:.7,side:THREE.DoubleSide})); base.rotation.x=-Math.PI/2; base.position.y=.01; g.add(base);
+    var rr=c.rainN/2400*1.6+.3, ringM=new THREE.Mesh(new THREE.RingGeometry(rr-.03,rr,64),new THREE.MeshBasicMaterial({color:COLORS.blue,transparent:true,opacity:.55,side:THREE.DoubleSide})); ringM.rotation.x=-Math.PI/2; ringM.position.y=.02; g.add(ringM);
+    var qf=new THREE.Mesh(new THREE.OctahedronGeometry(.14),new THREE.MeshStandardMaterial({color:COLORS.amber,emissive:COLORS.amber,emissiveIntensity:.6})); qf.position.set(.35,.5,0); qf.visible=false; g.add(qf);
+    var lab=document.createElement('button'); lab.className='mlabel'; lab.type='button'; lab.setAttribute('aria-label','Select '+c.name); labelsHost.appendChild(lab);
+    lab.addEventListener('click',function(){selectCity(c.id,true);});
+    objs[c.id]={g:g,col:col,base:base,ring:ringM,qf:qf,lab:lab,h:0};
+  });
+  // picking
+  var ray=new THREE.Raycaster(),mouse=new THREE.Vector2(),down=null;
+  renderer.domElement.addEventListener('pointerdown',function(e){down=[e.clientX,e.clientY];});
+  renderer.domElement.addEventListener('pointerup',function(e){if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;var r=renderer.domElement.getBoundingClientRect();mouse.x=(e.clientX-r.left)/r.width*2-1;mouse.y=-(e.clientY-r.top)/r.height*2+1;ray.setFromCamera(mouse,camera);var h=ray.intersectObjects(pickables)[0];if(h)selectCity(h.object.userData.id,false);});
+  renderer.domElement.addEventListener('pointermove',function(e){var r=renderer.domElement.getBoundingClientRect();mouse.x=(e.clientX-r.left)/r.width*2-1;mouse.y=-(e.clientY-r.top)/r.height*2+1;ray.setFromCamera(mouse,camera);renderer.domElement.style.cursor=ray.intersectObjects(pickables).length?'pointer':'grab';});
+  function resize(){var w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+  resize(); window.addEventListener('resize',resize); if(window.ResizeObserver)new ResizeObserver(resize).observe(host);
+  function apply(){
+    var ind=state.ind;
+    var vals=CITIES.map(function(c){return valueFor(c,ind);}).filter(function(v){return v!=null;}); var mx=Math.max.apply(null,vals);
+    CITIES.forEach(function(c){var o=objs[c.id],v=valueFor(c,ind),shown=(state.region==="all"||c.region===state.region)&&(state.cat==="all"||c.cat===state.cat);
+      var h=v==null?.08:Math.max(.15,v/mx*3.6), color;
+      if(ind==="gw")color=CAT[c.cat]; else if(ind==="trend")color=v>6?"#FF7A66":v>3?"#F2B544":"#28D9F2"; else if(ind==="rain")color="#168BFF"; else color=v==null?"#4A6275":"#FF7A66";
+      o.col.material.color.set(color); o.col.material.emissive.set(color); o.base.material.color.set(color);
+      if(window.gsap&&!REDUCED){gsap.to(o,{h:h,duration:.9,ease:"power3.out",onUpdate:function(){o.col.scale.y=o.h;o.col.position.y=o.h/2;o.qf.position.y=o.h+.3;}});}else{o.h=h;o.col.scale.y=h;o.col.position.y=h/2;o.qf.position.y=h+.3;}
+      o.g.visible=shown; o.lab.style.display=(shown&&state.layers.labels)?'':'none';
+      o.col.visible=state.layers.cols; o.ring.visible=state.layers.rings; o.qf.visible=state.layers.quality&&!/unavailable/i.test(c.quality);
+      o.lab.innerHTML=c.name+'<em>'+(v==null?'n/a':(ind==="rain"?v.toLocaleString('en-IN'):v)+(ind==="gap"&&v!=null?'%':''))+'</em>';
+      o.lab.classList.toggle('sel',c.id===state.sel);
+    });
+    grid.visible=state.layers.grid; relief.visible=state.layers.grid;
+  }
+  var visible=true; onVisible(host,function(v){visible=v;}); var clock=new THREE.Clock(), tmp=new THREE.Vector3();
+  function loop(){requestAnimationFrame(loop); if(!visible||tabHidden)return; var t=clock.getElapsedTime(); controls.update();
+    CITIES.forEach(function(c,i){var o=objs[c.id]; if(!REDUCED){o.qf.rotation.y=t; var s=1+.15*Math.sin(t*2+i); o.base.scale.set(s,s,s);} if(o.lab.style.display==='none')return;
+      tmp.set(o.g.position.x,o.h+.2,o.g.position.z).project(camera); var w=host.clientWidth,h=host.clientHeight; o.lab.style.left=((tmp.x+1)/2*w)+'px'; o.lab.style.top=((1-tmp.y)/2*h)+'px'; o.lab.style.opacity=tmp.z<1?1:0;});
+    renderer.render(scene,camera);}
+  loop();
+  function zoom(f){var d=camera.position.clone().sub(controls.target).multiplyScalar(f);var len=d.length();if(len<controls.minDistance||len>controls.maxDistance)return;if(window.gsap)gsap.to(camera.position,{x:controls.target.x+d.x,y:controls.target.y+d.y,z:controls.target.z+d.z,duration:.5});else camera.position.copy(controls.target).add(d);}
+  $('#zIn').onclick=function(){zoom(.8);}; $('#zOut').onclick=function(){zoom(1.25);};
+  $('#zReset').onclick=function(){if(window.gsap){gsap.to(camera.position,{x:home.x,y:home.y,z:home.z,duration:.8});gsap.to(controls.target,{x:0,y:0,z:-.3,duration:.8});}};
+  function focus(id){var c=byId[id],q=mxz(c.lon,c.lat);if(!window.gsap||REDUCED){controls.target.set(q.x,0,q.z);return;}gsap.to(controls.target,{x:q.x*.6,y:0,z:q.z*.6,duration:1.1,ease:"power2.inOut"});}
+  mapApi={apply:apply,focus:focus}; apply();
+}
+function renderLegend(){
+  var ind=state.ind, html='<b style="font-family:var(--display)">'+IND_INFO[ind].label+'</b> <span class="demo">DEMO</span>';
+  if(ind==="gw")Object.keys(CAT).forEach(function(k){html+='<div class="row"><i style="background:'+CAT[k]+'"></i>'+k+'</div>';});
+  if(ind==="trend")html+='<div class="row"><i style="background:#28D9F2"></i>≤ 3 m fall</div><div class="row"><i style="background:#F2B544"></i>3–6 m fall</div><div class="row"><i style="background:#FF7A66"></i>&gt; 6 m fall</div>';
+  if(ind==="rain")html+='<div class="row"><i style="background:#168BFF"></i>Column height ∝ annual rainfall</div>';
+  if(ind==="gap")html+='<div class="row"><i style="background:#FF7A66"></i>Shortfall, % of demand</div><div class="row"><i style="background:#4A6275"></i>Data unavailable</div>';
+  html+='<div class="row mute" style="margin-top:8px">Column height ∝ value. Categories are demonstration labels, not official city classifications.</div>';
+  $('#legend').innerHTML=html; $('#mapSource').textContent='Source: '+IND_INFO[ind].src;
+}
+function renderPanel(){
+  var c=byId[state.sel];
+  $('#cityPanel').innerHTML='<div class="mute" style="font-size:.85rem">'+c.state+' · '+c.region+'</div><h3>'+c.name+'</h3><p class="mute" style="font-size:.9rem;margin-top:10px">'+c.context+'</p>'+
+   '<dl class="kv"><dt>Groundwater category <span class="demo">DEMO</span></dt><dd>'+catHTML(c.cat)+'</dd>'+
+   '<dt>Depth to water, 2024 <span class="demo">DEMO</span></dt><dd>'+c.gw[9]+' m bgl</dd>'+
+   '<dt>Fall since 2015 <span class="demo">DEMO</span></dt><dd>'+c.decline+' m</dd>'+
+   '<dt>Rainfall normal (approx.)</dt><dd>'+c.rainN.toLocaleString('en-IN')+' mm</dd>'+
+   '<dt>Demand shortfall <span class="demo">DEMO</span></dt><dd>'+fmt(c.gap,'%')+'</dd></dl>'+
+   '<p style="font-size:.85rem"><b>Water quality:</b> <span class="mute">'+c.quality+'</span></p>'+
+   '<div class="actions"><button class="btn sm primary" data-act="profile">Open city profile</button><button class="btn sm" data-act="A">Compare as city 1</button><button class="btn sm" data-act="B">Compare as city 2</button></div>'+
+   '<p class="note">Verify the category for the assessment units covering '+c.name+' on <a href="https://ingres.iith.ac.in/" target="_blank" rel="noopener">INGRES</a>.</p>';
+  $$('#cityPanel [data-act]').forEach(function(b){b.onclick=function(){var a=b.dataset.act;if(a==="profile"){setProfile(c.id);$('#cities').scrollIntoView({behavior:REDUCED?'auto':'smooth'});}else{$(a==="A"?'#cmpA':'#cmpB').value=c.id;renderCompare();$('#compare').scrollIntoView({behavior:REDUCED?'auto':'smooth'});}};});
+}
+function selectCity(id,fromLabel){state.sel=id;renderPanel();if(mapApi){mapApi.apply();mapApi.focus(id);}}
+$$('#indicatorSeg button').forEach(function(b){b.addEventListener('click',function(){$$('#indicatorSeg button').forEach(function(x){x.setAttribute('aria-pressed',x===b);});state.ind=b.dataset.ind;renderLegend();if(mapApi)mapApi.apply();});});
+$$('[data-layer]').forEach(function(i){i.addEventListener('change',function(){state.layers[i.dataset.layer]=i.checked;if(mapApi)mapApi.apply();});});
+$('#fRegion').onchange=function(){state.region=this.value;if(mapApi)mapApi.apply();};
+$('#fCat').onchange=function(){state.cat=this.value;if(mapApi)mapApi.apply();};
+
+/* ================= CHARTS ================= */
+var hasChart=!!window.Chart;
+if(hasChart){Chart.defaults.color='#8FA6B8';Chart.defaults.font.family='Figtree, system-ui, sans-serif';Chart.defaults.borderColor='rgba(242,248,252,.07)';if(REDUCED)Chart.defaults.animation=false;}
+function lineCfg(datasets,reverse,unit){return {type:'line',data:{labels:YEARS,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:datasets.length>1,labels:{boxWidth:10}},tooltip:{backgroundColor:'#06111D',borderColor:'#28D9F2',borderWidth:1,callbacks:{label:function(c){return ' '+c.dataset.label+': '+c.parsed.y+' '+unit;}}}},scales:{y:{reverse:!!reverse,title:{display:true,text:unit}},x:{grid:{display:false}}},animation:{duration:900,easing:'easeOutQuart'}}};}
+function ds(label,data,color,fill){return {label:label,data:data,borderColor:color,backgroundColor:fill?color+'22':color,fill:!!fill,tension:.35,pointRadius:3,pointBackgroundColor:color,borderWidth:2};}
+function noChart(el){el.parentNode.innerHTML='<div class="nogl">Charts could not load. Data: see table values.</div>';}
+
+/* ================= CITY PROFILES ================= */
+var profCharts=[], tabs=$('#cityTabs');
+CITIES.forEach(function(c){var b=document.createElement('button');b.className='chip';b.setAttribute('role','tab');b.id='tab-'+c.id;b.textContent=c.name;b.onclick=function(){setProfile(c.id);};tabs.appendChild(b);});
+function indiaSVG(c){var minLo=67.5,maxLo=98,minLa=6,maxLa=37.5,W=300,H=W*(maxLa-minLa)/(maxLo-minLo);function P(lo,la){return [((lo-minLo)/(maxLo-minLo)*W).toFixed(1),((maxLa-la)/(maxLa-minLa)*H).toFixed(1)];}
+ var d=INDIA.map(function(p,i){var q=P(p[0],p[1]);return (i?'L':'M')+q[0]+' '+q[1];}).join('')+'Z'; var dots=CITIES.map(function(o){var q=P(o.lon,o.lat);return '<circle cx="'+q[0]+'" cy="'+q[1]+'" r="'+(o.id===c.id?6:3)+'" fill="'+(o.id===c.id?'#28D9F2':'#3E5D73')+'"/>';}).join(''); var q=P(c.lon,c.lat);
+ return '<svg viewBox="0 0 '+W+' '+H.toFixed(0)+'" role="img" aria-label="Location of '+c.name+' in India"><path d="'+d+'" fill="#0C2F47" stroke="#28D9F2" stroke-width="1"/>'+dots+'<circle cx="'+q[0]+'" cy="'+q[1]+'" r="14" fill="none" stroke="#28D9F2" opacity=".5"/><text x="'+(+q[0]+12)+'" y="'+(+q[1]-10)+'" fill="#F2F8FC" font-size="13" font-family="Bricolage Grotesque">'+c.name+'</text></svg>';}
+function setProfile(id){
+  var c=byId[id], host=$('#cityProfile');
+  $$('#cityTabs .chip').forEach(function(b){var on=b.id==='tab-'+id;b.setAttribute('aria-selected',on);b.classList.toggle('on',on);if(on&&b.scrollIntoView&&host.dataset.ready)b.scrollIntoView({block:'nearest',inline:'center'});});
+  host.classList.add('out');
+  setTimeout(function(){
+    profCharts.forEach(function(ch){ch.destroy();}); profCharts=[];
+    host.innerHTML='<div class="city-hero"><div><h2 class="city-name">'+c.name+'</h2><div class="city-state">'+c.state+' · '+c.lat.toFixed(2)+'°N, '+c.lon.toFixed(2)+'°E</div><p class="lede" style="margin-top:24px">'+c.context+'</p><a class="btn sm" href="#map" style="margin-top:8px">Back to national map</a></div><div class="locator">'+indiaSVG(c)+'</div></div>'+
+     '<div class="metric-row"><div class="metric"><label>Groundwater category <span class="demo">DEMO</span></label><b style="font-size:1.4rem;margin-top:12px">'+catHTML(c.cat)+'</b><small>Official categories are per assessment unit</small></div>'+
+     '<div class="metric"><label>Depth to water, 2024 <span class="demo">DEMO</span></label><b>'+c.gw[9]+' m</b><small>below ground level</small></div>'+
+     '<div class="metric"><label>Change since 2015 <span class="demo">DEMO</span></label><b>−'+c.decline+' m</b><small>water table fall</small></div>'+
+     '<div class="metric"><label>Demand shortfall <span class="demo">DEMO</span></label><b>'+(c.gap==null?'<span class="na" style="font-size:1.1rem">Data unavailable</span>':c.gap+'%')+'</b><small>of estimated demand</small></div></div>'+
+     '<div class="chart-grid"><div class="chart-card"><header><h4>Depth to groundwater, 2015–2024</h4><span class="demo">DEMO</span></header><div class="chart-box"><canvas id="pGw"></canvas></div><p class="src">Unit: metres below ground level (m bgl). Replace with CGWB monitoring-well data.</p></div>'+
+     '<div class="chart-card"><header><h4>Annual rainfall, 2015–2024</h4><span class="demo">DEMO</span></header><div class="chart-box"><canvas id="pRain"></canvas></div><p class="src">Dashed line: approximate long-term normal ('+c.rainN+' mm). Replace with IMD district rainfall.</p></div></div>'+
+     '<div class="city-cols"><div><h4>Key pressures</h4><ul>'+c.pressures.map(function(p){return '<li>'+p+'</li>';}).join('')+'</ul></div><div><h4>Suggested interventions</h4><ul>'+c.fixes.map(function(p){return '<li>'+p+'</li>';}).join('')+'</ul></div><div><h4>Water quality, sources &amp; limits</h4><ul><li>'+c.quality+'</li><li>Groundwater: CGWB / INGRES (demo values shown)</li><li>Rainfall: IMD (demo series around approx. normal)</li><li>City boundaries don\'t match assessment units</li></ul></div></div>';
+    if(hasChart){
+      profCharts.push(new Chart($('#pGw'),lineCfg([ds(c.name,c.gw,'#28D9F2',true)],true,'m bgl')));
+      profCharts.push(new Chart($('#pRain'),{type:'bar',data:{labels:YEARS,datasets:[{type:'bar',label:'Annual rainfall',data:c.rain,backgroundColor:'rgba(22,139,255,.55)',borderRadius:4},{type:'line',label:'Approx. normal',data:YEARS.map(function(){return c.rainN;}),borderColor:'#F2B544',borderDash:[6,5],pointRadius:0,borderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10}}},scales:{y:{title:{display:true,text:'mm'}},x:{grid:{display:false}}}}}));
+    } else {noChart($('#pGw'));noChart($('#pRain'));}
+    host.classList.remove('out'); host.dataset.ready=1;
+  }, host.dataset.ready?200:0);
+}
+
+/* ================= COMPARE ================= */
+var cmpCharts=[];
+['#cmpA','#cmpB'].forEach(function(s,i){var el=$(s);CITIES.forEach(function(c){var o=document.createElement('option');o.value=c.id;o.textContent=c.name;el.appendChild(o);});el.value=i?'bengaluru':'ludhiana';el.onchange=renderCompare;});
+function renderCompare(){
+  var a=byId[$('#cmpA').value], b=byId[$('#cmpB').value];
+  var rows=[['Indicator','Unit / year',a.name,b.name],
+   ['Groundwater category <span class="demo">DEMO</span>','Assessment unit, latest',catHTML(a.cat),catHTML(b.cat)],
+   ['Depth to water <span class="demo">DEMO</span>','m bgl, 2024',a.gw[9],b.gw[9]],
+   ['Water-table fall <span class="demo">DEMO</span>','m, 2015→2024',a.decline,b.decline],
+   ['Rainfall normal (approx.)','mm/yr, long-term',a.rainN.toLocaleString('en-IN'),b.rainN.toLocaleString('en-IN')],
+   ['Demand shortfall <span class="demo">DEMO</span>','% of demand',fmt(a.gap,'%'),fmt(b.gap,'%')],
+   ['Water quality context','Qualitative',a.quality,b.quality]];
+  $('#cmpTable').innerHTML='<thead><tr>'+rows[0].map(function(h,i){return '<th'+(i===2?' style="color:#28D9F2"':i===3?' style="color:#F2B544"':'')+'>'+h+'</th>';}).join('')+'</tr></thead><tbody>'+rows.slice(1).map(function(r){return '<tr>'+r.map(function(c,i){return '<td'+(i>1?' style="min-width:180px"':'')+'>'+c+'</td>';}).join('')+'</tr>';}).join('')+'</tbody>';
+  cmpCharts.forEach(function(c){c.destroy();}); cmpCharts=[];
+  if(hasChart){cmpCharts.push(new Chart($('#cmpGw'),lineCfg([ds(a.name,a.gw,'#28D9F2'),ds(b.name,b.gw,'#F2B544')],true,'m bgl')));
+   cmpCharts.push(new Chart($('#cmpRain'),lineCfg([ds(a.name,a.rain,'#28D9F2'),ds(b.name,b.rain,'#F2B544')],false,'mm')));}
+}
+
+/* ================= GROUNDWATER CUTAWAY ================= */
+var STAGES=[
+ {t:"Rain reaches the surface",d:"Monsoon clouds release rain over the city. On rooftops and roads most of it runs off into drains; on open soil and parks it can soak in.",ext:0,rec:65,show:{rain:1,inf:0,pump:0}},
+ {t:"Water infiltrates the soil",d:"Infiltration is water entering the ground. It's fastest through sandy, open, vegetated soil and slowest through clay or paving.",ext:0,rec:65,show:{rain:1,inf:1,pump:0}},
+ {t:"Some water recharges the aquifer",d:"Water that percolates past plant roots through the unsaturated zone reaches the saturated zone. This is groundwater recharge.",ext:0,rec:70,show:{rain:1,inf:2,pump:0}},
+ {t:"A borewell extracts groundwater",d:"Pumping lifts water from the aquifer. Around the well, the water table dips into a cone of depression.",ext:40,rec:60,show:{rain:1,inf:2,pump:1}},
+ {t:"Over-extraction lowers the water table",d:"When pumping exceeds recharge year after year, the water table falls. Wells need to go deeper and shallow wells dry up.",ext:85,rec:55,show:{rain:1,inf:2,pump:1}},
+ {t:"Less recharge deepens the decline",d:"Paving, lost lakes and weak monsoons cut recharge. With heavy pumping on top, storage keeps shrinking — the core of urban groundwater stress.",ext:85,rec:15,show:{rain:1,inf:2,pump:1}}];
+var sim={stage:0,ext:0,rec:65,show:STAGES[0].show}, cutApi=null;
+function initCut(){
+  var host=$('#cut-canvas'); if(!HAS3D){host.innerHTML='<div class="nogl">The 3D cutaway needs WebGL. The stage descriptions and sliders still explain the process.</div>';return;}
+  var renderer=new THREE.WebGLRenderer({antialias:true,alpha:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,1.75)); host.appendChild(renderer.domElement);
+  var scene=new THREE.Scene(), camera=new THREE.PerspectiveCamera(36,1,.1,100); camera.position.set(4.5,2.6,12.5);
+  var controls=new THREE.OrbitControls(camera,renderer.domElement); controls.target.set(0,-1.2,0); controls.enableDamping=true; controls.enablePan=false; controls.minDistance=8; controls.maxDistance=20; controls.minAzimuthAngle=-.9; controls.maxAzimuthAngle=.9; controls.maxPolarAngle=Math.PI*.6;
+  scene.add(new THREE.HemisphereLight(0xcfeeff,0x1a1208,.75)); var dl=new THREE.DirectionalLight(0xffffff,.85); dl.position.set(5,8,9); scene.add(dl);
+  var W=10,D=4,TOP=0,B1=-.6,B2=-2.2,B3=-4.2,BOT=-5,WX=1.6;
+  function slab(y0,y1,color,rough){var m=new THREE.Mesh(new THREE.BoxGeometry(W,y0-y1,D),new THREE.MeshStandardMaterial({color:color,roughness:rough||.9}));m.position.y=(y0+y1)/2;scene.add(m);return m;}
+  slab(TOP,B1,0x5a3e2b); slab(B1,B2,0x8a6b45); slab(B2,B3,0x6b6457); slab(B3,BOT,0x3a3f47,.6);
+  // strata texture dots on cut face
+  var sp=[],scol=[];function sprinkle(y0,y1,n,c){var col=new THREE.Color(c);for(var i=0;i<n;i++){sp.push((Math.random()-.5)*W*.98,y1+Math.random()*(y0-y1),D/2+.012);scol.push(col.r,col.g,col.b);}}
+  sprinkle(TOP,B1,300,0x3b2718); sprinkle(B1,B2,500,0xb08d5e); sprinkle(B2,B3,700,0xa59f8f); sprinkle(B3,BOT,250,0x222830);
+  var sGeo=new THREE.BufferGeometry();sGeo.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));sGeo.setAttribute('color',new THREE.Float32BufferAttribute(scol,3));
+  scene.add(new THREE.Points(sGeo,new THREE.PointsMaterial({size:.06,vertexColors:true})));
+  // surface: grass + paved strip
+  var grass=new THREE.Mesh(new THREE.BoxGeometry(W*.42,.04,D),new THREE.MeshStandardMaterial({color:0x2f6b3a}));grass.position.set(-W*.29,TOP+.02,0);scene.add(grass);
+  var paved=new THREE.Mesh(new THREE.BoxGeometry(W*.58,.05,D),new THREE.MeshStandardMaterial({color:0x2b3542,roughness:.6}));paved.position.set(W*.21,TOP+.025,0);scene.add(paved);
+  var bmat=new THREE.MeshStandardMaterial({color:0x7d93a8,roughness:.5,metalness:.2,emissive:0x0a1a28});
+  [[.5,1.6,.9],[1.9,2.4,1.1],[3.1,1.2,.8],[4.1,1.9,.9],[2.6,.9,.7]].forEach(function(b,i){var m=new THREE.Mesh(new THREE.BoxGeometry(b[2],b[1],b[2]),bmat);m.position.set(b[0],b[1]/2+.05,i%2?-1:.6);scene.add(m);});
+  var tmat=new THREE.MeshStandardMaterial({color:0x3d9a54}),trunk=new THREE.MeshStandardMaterial({color:0x5b3d24});
+  [[-4.2,.4],[-3.3,-1.1],[-2.4,.9],[-1.4,-.4],[-4.4,-1.4]].forEach(function(p){var c=new THREE.Mesh(new THREE.ConeGeometry(.3,.9,10),tmat);c.position.set(p[0],.75,p[1]);scene.add(c);var t=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.3,6),trunk);t.position.set(p[0],.17,p[1]);scene.add(t);});
+  // clouds
+  var cmat=new THREE.MeshStandardMaterial({color:0xdfe9f2,roughness:1,transparent:true,opacity:.92}),cloudG=new THREE.Group();
+  [[-3,4.2],[-.5,4.6],[2.6,4.3]].forEach(function(c){for(var i=0;i<6;i++){var s=new THREE.Mesh(new THREE.SphereGeometry(.45+Math.random()*.35,16,16),cmat);s.position.set(c[0]+(Math.random()-.5)*1.6,c[1]+(Math.random()-.5)*.3,(Math.random()-.5)*1.4);cloudG.add(s);}});scene.add(cloudG);
+  // well
+  var casing=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,4.4,16,1,true),new THREE.MeshStandardMaterial({color:0xcfd8e0,metalness:.6,roughness:.3,side:THREE.DoubleSide,transparent:true,opacity:.85}));casing.position.set(WX,-1.85,D/2+.02);scene.add(casing);
+  var pump=new THREE.Mesh(new THREE.BoxGeometry(.4,.35,.35),new THREE.MeshStandardMaterial({color:0x168bff,emissive:0x0a3a70}));pump.position.set(WX,.22,D/2+.02);scene.add(pump);
+  // water body (rebuilt as level changes)
+  var wMat=new THREE.MeshStandardMaterial({color:0x168bff,emissive:0x0b4a8a,emissiveIntensity:.55,transparent:true,opacity:.82,roughness:.15,metalness:.1});
+  var water=null, lastKey='';
+  function buildWater(L,dd){var key=L.toFixed(3)+dd.toFixed(3);if(key===lastKey)return;lastKey=key;var s=new THREE.Shape();s.moveTo(-W/2,B3);s.lineTo(W/2,B3);for(var i=0;i<=80;i++){var x=W/2-i/80*W;var y=L-dd*Math.exp(-Math.pow(x-WX,2)/.9);s.lineTo(x,Math.max(y,B3+.06));}
+    var g=new THREE.ExtrudeGeometry(s,{depth:D+.03,bevelEnabled:false,curveSegments:1});g.translate(0,0,-(D+.03)/2);if(water){water.geometry.dispose();water.geometry=g;}else{water=new THREE.Mesh(g,wMat);scene.add(water);}}
+  // particles
+  function pts(n,color,size){var g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(n*3),3));var p=new THREE.Points(g,new THREE.PointsMaterial({color:color,size:size,transparent:true,opacity:.9,depthWrite:false}));scene.add(p);return p;}
+  var RN=MOBILE?250:600, rain=pts(RN,0x9fdcff,.05), rpos=rain.geometry.attributes.position.array;
+  for(var i=0;i<RN;i++){rpos[i*3]=(Math.random()-.5)*W;rpos[i*3+1]=Math.random()*4;rpos[i*3+2]=(Math.random()-.5)*D;}
+  var IN=160, inf=pts(IN,0x28d9f2,.08), ipos=inf.geometry.attributes.position.array, ivel=[];
+  for(i=0;i<IN;i++){ipos[i*3]=-W/2+Math.random()*W*.45;ipos[i*3+1]=-Math.random()*2;ipos[i*3+2]=D/2+.05;ivel.push(.3+Math.random()*.5);}
+  var PN=60, pw=pts(PN,0xffffff,.07), ppos=pw.geometry.attributes.position.array;
+  for(i=0;i<PN;i++){ppos[i*3]=WX;ppos[i*3+1]=B2-Math.random()*1.5;ppos[i*3+2]=D/2+.15;}
+  var cur={L:-2.7,d:.1};
+  function resize(){var w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+  resize(); window.addEventListener('resize',resize); if(window.ResizeObserver)new ResizeObserver(resize).observe(host);
+  // hotspots
+  var HS=[{k:"Aquifer",t:"A layer of permeable rock, sand or gravel that stores groundwater and lets it flow to wells.",p:function(){return [-3.5,(B3+cur.L)/2,D/2];}},
+          {k:"Infiltration",t:"Water soaking into the soil surface. Open, vegetated ground infiltrates far better than concrete.",p:function(){return [-2.5,-.4,D/2];}},
+          {k:"Groundwater recharge",t:"Infiltrated water that percolates down and refills the aquifer — the 'income' side of the groundwater budget.",p:function(){return [-1.4,cur.L+.35,D/2];}},
+          {k:"Water table",t:"The top of the saturated zone. Below it, pores are full of water; above it they hold air and moisture.",p:function(){return [4.2,cur.L,D/2];}},
+          {k:"Extraction",t:"Pumping water out through wells and borewells — the 'spending' side of the budget.",p:function(){return [WX,.75,D/2];}},
+          {k:"Depletion",t:"A long-term fall in groundwater storage when extraction exceeds recharge. It shows up as a falling water table.",p:function(){return [WX+.6,cur.L-cur.d,D/2];}}];
+  var hsHost=$('#hotspots'); HS.forEach(function(h,i){var d=document.createElement('div');d.className='hs';d.innerHTML='<button type="button" aria-label="'+h.k+'">'+(i+1)+'</button><div class="tip" role="tooltip"><b>'+h.k+'</b>'+h.t+'</div>';hsHost.appendChild(d);h.el=d;d.querySelector('button').addEventListener('click',function(){var o=d.classList.contains('open');$$('.hs').forEach(function(x){x.classList.remove('open');});if(!o)d.classList.add('open');});});
+  var visible=true; onVisible(host,function(v){visible=v;}); var clock=new THREE.Clock(), v3=new THREE.Vector3(), last=0;
+  function loop(){requestAnimationFrame(loop); if(!visible||tabHidden)return; var t=clock.getElapsedTime(), dt=Math.min(t-last,.05); last=t; controls.update();
+    var targetL=-2.75+(sim.rec-50)/50*.38-(sim.ext-30)/70*1.05; targetL=Math.max(B3+.15,Math.min(B2-.08,targetL));
+    var targetD=sim.show.pump?.1+sim.ext/100*.9:0; targetD=Math.min(targetD,targetL-(B3+.1));
+    var k=REDUCED?1:Math.min(1,dt*1.2); cur.L+=(targetL-cur.L)*k; cur.d+=(targetD-cur.d)*k; buildWater(cur.L,cur.d);
+    // rain
+    var rOn=sim.show.rain&&sim.rec>2; rain.visible=rOn; var rCount=Math.floor(RN*sim.rec/100); rain.geometry.setDrawRange(0,rCount);
+    if(rOn&&!REDUCED){for(var i=0;i<rCount;i++){rpos[i*3+1]-=dt*(5+i%5);if(rpos[i*3+1]<.05)rpos[i*3+1]=3.9;}rain.geometry.attributes.position.needsUpdate=true;}
+    // infiltration
+    inf.visible=sim.show.inf>0&&sim.rec>2; var iCount=Math.floor(IN*Math.max(.15,sim.rec/100)); inf.geometry.setDrawRange(0,iCount); var floorY=sim.show.inf>1?cur.L:B2+.3;
+    if(inf.visible&&!REDUCED){for(i=0;i<iCount;i++){ipos[i*3+1]-=dt*ivel[i]*(.5+sim.rec/100);if(ipos[i*3+1]<floorY){ipos[i*3+1]=-.02;ipos[i*3]=-W/2+Math.random()*W*.45;}}inf.geometry.attributes.position.needsUpdate=true;}
+    // pumping
+    pw.visible=!!sim.show.pump&&sim.ext>2;
+    if(pw.visible&&!REDUCED){for(i=0;i<PN;i++){ppos[i*3+1]+=dt*(.6+sim.ext/40);if(ppos[i*3+1]>.3)ppos[i*3+1]=cur.L-cur.d-.2;}pw.geometry.attributes.position.needsUpdate=true;}
+    pump.material.emissiveIntensity=sim.show.pump?.4+.6*Math.abs(Math.sin(t*sim.ext/15)):.1;
+    if(!REDUCED)cloudG.position.x=Math.sin(t*.15)*.4;
+    // gauge
+    var store=Math.round((cur.L-B3)/(B2-B3)*100); $('#storeOut').textContent=store+'%'; $('#storeBar').style.width=store+'%';
+    var w=host.clientWidth,h=host.clientHeight; HS.forEach(function(s){var p=s.p();v3.set(p[0],p[1],p[2]).project(camera);s.el.style.left=((v3.x+1)/2*w)+'px';s.el.style.top=((1-v3.y)/2*h)+'px';});
+    renderer.render(scene,camera);}
+  loop(); cutApi=true;
+}
+var stagesEl=$('#stages'); STAGES.forEach(function(s,i){var b=document.createElement('button');b.textContent=i+1;b.setAttribute('aria-label','Stage '+(i+1)+': '+s.t);b.onclick=function(){stopPlay();setStage(i);};stagesEl.appendChild(b);});
+function setStage(i){sim.stage=i;var s=STAGES[i];sim.show=s.show;sim.ext=s.ext;sim.rec=s.rec;$('#rExt').value=s.ext;$('#rRec').value=s.rec;syncOut();
+  $$('#stages button').forEach(function(b,j){b.setAttribute('aria-pressed',j===i);});$('#stageText').innerHTML='<h4>'+(i+1)+'. '+s.t+'</h4><p>'+s.d+'</p>';}
+function syncOut(){$('#oExt').textContent=sim.ext+'%';$('#oRec').textContent=sim.rec+'%';}
+function onSlider(){stopPlay();sim.ext=+$('#rExt').value;sim.rec=+$('#rRec').value;sim.show={rain:1,inf:2,pump:1};$$('#stages button').forEach(function(b){b.setAttribute('aria-pressed','false');});$('#stageText').innerHTML='<h4>Your scenario</h4><p>'+(sim.ext>sim.rec?'Extraction is outpacing recharge, so the water table falls and the cone of depression around the well widens.':'Recharge is keeping pace with extraction, so the water table stays relatively stable.')+'</p>';syncOut();}
+$('#rExt').addEventListener('input',onSlider); $('#rRec').addEventListener('input',onSlider);
+var playT=null; function stopPlay(){if(playT){clearInterval(playT);playT=null;$('#playStages').textContent='Play sequence';}}
+$('#playStages').onclick=function(){if(playT){stopPlay();return;}var i=0;setStage(0);this.textContent='Pause';playT=setInterval(function(){i++;if(i>=STAGES.length){stopPlay();return;}setStage(i);},4200);};
+$('#resetSim').onclick=function(){stopPlay();setStage(0);};
+setStage(0);
+
+/* ================= SOLUTIONS ================= */
+var SOL=[
+ {t:"Rooftop rainwater harvesting",d:"Gutters lead roof runoff through a first-flush diverter and filter into a tank or a recharge pit.",svg:'<path d="M20 60 L80 25 L140 60" stroke="#F2F8FC" stroke-width="2" fill="none"/><rect x="30" y="60" width="100" height="50" fill="#0C2F47" stroke="#28D9F2"/><path d="M140 60 v40 h20" stroke="#28D9F2" stroke-width="2" fill="none"/><rect x="160" y="80" width="40" height="34" rx="4" fill="#09263A" stroke="#28D9F2"/><rect class="fillup" x="162" y="96" width="36" height="16" fill="#168BFF"/>'+[0,1,2,3,4].map(function(i){return '<line class="drop" style="animation-delay:'+(i*.3)+'s" x1="'+(40+i*22)+'" y1="0" x2="'+(36+i*22)+'" y2="12" stroke="#7FB8FF" stroke-width="2"/>';}).join('')},
+ {t:"Recharge structures",d:"Recharge wells, shafts and percolation pits send stormwater past impermeable layers directly towards the aquifer.",svg:'<rect x="0" y="40" width="220" height="80" fill="#3a2a1d"/><rect x="0" y="90" width="220" height="30" fill="#168BFF" opacity=".6"/><rect x="95" y="30" width="30" height="62" fill="#0C2F47" stroke="#28D9F2"/>'+[0,1,2].map(function(i){return '<circle class="sink" style="animation-delay:'+(i*.6)+'s" cx="110" cy="40" r="4" fill="#28D9F2"/>';}).join('')},
+ {t:"Wastewater treatment and reuse",d:"Treated sewage can serve parks, cooling, construction and industry, saving fresh water for drinking.",svg:'<g class="spin" style="transform-origin:110px 62px"><circle cx="110" cy="62" r="44" fill="none" stroke="#28D9F2" stroke-width="2" stroke-dasharray="10 8"/></g><circle cx="110" cy="62" r="22" fill="#09263A" stroke="#168BFF"/><path d="M100 62 q10-16 20 0 q-10 16-20 0z" fill="#28D9F2"/>'},
+ {t:"Lake and wetland restoration",d:"Desilting, clearing inflow channels and protecting catchments revives lakes that once buffered floods and recharged groundwater.",svg:'<ellipse cx="110" cy="78" rx="96" ry="26" fill="#09263A" stroke="#28D9F2"/><path class="wave" d="M30 78 q20-8 40 0 t40 0 t40 0 t40 0" stroke="#28D9F2" fill="none" stroke-width="1.5"/>'+[40,170,185].map(function(x){return '<path d="M'+x+' 56 v-26 M'+(x+6)+' 56 v-18" stroke="#3d9a54" stroke-width="2"/>';}).join('')},
+ {t:"Water-efficient infrastructure",d:"Pressure management, metering and leak detection cut losses in the distribution network.",svg:'<path d="M10 60 h70 v30 h60 v-30 h70" stroke="#28D9F2" stroke-width="10" fill="none" stroke-linejoin="round" opacity=".25"/><path class="flow" d="M10 60 h70 v30 h60 v-30 h70" stroke="#28D9F2" stroke-width="3" fill="none" stroke-dasharray="8 10"/><circle cx="110" cy="90" r="11" fill="#06111D" stroke="#F2B544" stroke-width="2"/><path d="M110 90 l5-5" stroke="#F2B544" stroke-width="2"/>'},
+ {t:"Household and community action",d:"Fixing leaks, low-flow fixtures, reusing RO reject water and community monitoring of wells add up across a city.",svg:'<path d="M60 20 h40 v14 h-20 v10" stroke="#F2F8FC" stroke-width="3" fill="none"/><path class="drip" d="M80 52 q-6 10 0 14 q6-4 0-14z" fill="#28D9F2"/><rect x="50" y="84" width="60" height="30" rx="4" fill="none" stroke="#28D9F2"/><path d="M140 100 a20 20 0 1 0 40 0" stroke="#168BFF" fill="none" stroke-width="2"/>'}];
+$('#solGrid').innerHTML=SOL.map(function(s){return '<article class="sol reveal"><svg viewBox="0 0 220 120" aria-hidden="true">'+s.svg+'</svg><h3>'+s.t+'</h3><p>'+s.d+'</p></article>';}).join('');
+var solStyle=document.createElement('style');solStyle.textContent='.drop{animation:drop 1.4s linear infinite}@keyframes drop{0%{transform:translateY(-6px);opacity:0}20%{opacity:1}100%{transform:translateY(48px);opacity:0}}.fillup{animation:fill 4s ease-in-out infinite alternate;transform-origin:bottom;transform-box:fill-box}@keyframes fill{from{transform:scaleY(.2)}to{transform:scaleY(1)}}.sink{animation:sink 2s linear infinite}@keyframes sink{0%{transform:translateY(0);opacity:1}100%{transform:translateY(55px);opacity:0}}.spin{animation:spin 12s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.wave{animation:wave 3s ease-in-out infinite alternate}@keyframes wave{to{transform:translateX(-8px)}}.flow{animation:flow 1.6s linear infinite}@keyframes flow{to{stroke-dashoffset:-36}}.drip{animation:drip 1.8s ease-in infinite}@keyframes drip{0%{transform:translateY(0);opacity:1}100%{transform:translateY(24px);opacity:0}}';document.head.appendChild(solStyle);
+
+/* calculator */
+var cCity=$('#cCity'); CITIES.forEach(function(c){var o=document.createElement('option');o.value=c.rainN;o.textContent=c.name+' (~'+c.rainN+' mm)';cCity.appendChild(o);});
+cCity.onchange=function(){if(this.value){$('#cR').value=this.value;calc();}};
+function animNum(el,to,dec){var from=parseFloat(el.dataset.v||0);el.dataset.v=to;if(REDUCED||!window.gsap){el.textContent=to.toLocaleString('en-IN',{maximumFractionDigits:dec});return;}var o={v:from};gsap.to(o,{v:to,duration:.6,ease:"power2.out",onUpdate:function(){el.textContent=o.v.toLocaleString('en-IN',{maximumFractionDigits:dec,minimumFractionDigits:0});}});}
+function calc(){var A=parseFloat($('#cA').value),R=parseFloat($('#cR').value),C=parseFloat($('#cC').value);
+  if(!(A>0)||!(R>0)){$('#cErr').textContent='Enter a roof area and rainfall greater than zero.';$('#cM3').textContent='—';$('#cL').textContent='—';return;}
+  $('#cErr').textContent='';var V=A*R*C/1000;animNum($('#cM3'),+V.toFixed(1),1);animNum($('#cL'),Math.round(V*1000),0);}
+['#cA','#cR','#cC'].forEach(function(s){$(s).addEventListener('input',calc);}); calc();
+/* scenario */
+function fmtVol(m3){return m3>=1e6?(m3/1e6).toFixed(2)+' million m³':Math.round(m3).toLocaleString('en-IN')+' m³';}
+function scen(){var pop=parseFloat($('#sPop').value)*1e5,l=parseFloat($('#sLpcd').value),r=parseFloat($('#sRain').value),roof=parseFloat($('#sRoof').value),sh=+$('#sShare').value/100;$('#oShare').textContent=Math.round(sh*100)+'%';
+  if(!(pop>0)||!(l>0)||!(r>0)||!(roof>0)){$('#sErr').textContent='All inputs must be greater than zero.';return;}$('#sErr').textContent='';
+  var dem=pop*l*365/1000, har=(pop/5)*sh*roof*r*.8/1000, pct=Math.min(100,har/dem*100);
+  $('#sDem').textContent=fmtVol(dem);$('#sHar').textContent=fmtVol(har);$('#sPct').textContent=pct.toFixed(1)+'%';$('#sMeter').style.width=pct+'%';}
+['#sPop','#sLpcd','#sRain','#sRoof','#sShare'].forEach(function(s){$(s).addEventListener('input',scen);}); scen();
+
+/* ================= LEARN ================= */
+var LEARN=[
+ {t:"The hydrological cycle",s:"Water moves continuously between oceans, air and land through evaporation, condensation, precipitation, infiltration and runoff.",m:"Solar energy drives evaporation from oceans and transpiration from plants (together, evapotranspiration). Vapour condenses into clouds, falls as precipitation, and then either runs off to rivers, infiltrates the ground, or evaporates again. The total amount of water on Earth stays roughly constant; its location and quality change.",q:"Which process returns water from plants to the atmosphere?",o:["Infiltration","Transpiration","Percolation"],a:1,svg:'<circle cx="40" cy="30" r="14" fill="#F2B544"/><path d="M10 100 q40-14 80 0 t80 0" stroke="#168BFF" stroke-width="3" fill="none"/><path d="M120 34 a18 12 0 0 1 36 0 a12 10 0 0 1 0 20 h-36 a10 10 0 0 1 0-20z" fill="#cfe3f2"/><path d="M90 92 C 90 60 110 50 130 56" stroke="#28D9F2" stroke-dasharray="4 4" fill="none" class="flow"/><line x1="134" y1="60" x2="130" y2="80" stroke="#7FB8FF" stroke-width="2"/><line x1="146" y1="60" x2="142" y2="80" stroke="#7FB8FF" stroke-width="2"/>'},
+ {t:"Groundwater and aquifers",s:"Groundwater fills the pores and cracks of rock and sediment below the water table. Aquifers are the layers that store and yield it.",m:"Unconfined aquifers have the water table as their upper surface and recharge directly from above. Confined aquifers sit between low-permeability layers (aquitards) and are under pressure. Porosity is how much water a material holds; permeability is how easily water moves through it. Alluvial plains like Punjab's have productive aquifers; hard-rock regions like Bengaluru store far less.",q:"What is the water table?",o:["The bottom of an aquifer","The top of the saturated zone","A layer of clay"],a:1,svg:'<rect x="10" y="20" width="160" height="22" fill="#5a3e2b"/><rect x="10" y="42" width="160" height="30" fill="#8a6b45"/><rect x="10" y="72" width="160" height="30" fill="#168BFF" opacity=".7"/><line x1="10" y1="72" x2="170" y2="72" stroke="#28D9F2" stroke-width="2" stroke-dasharray="6 4"/><rect x="10" y="102" width="160" height="14" fill="#3a3f47"/>'},
+ {t:"Urban water scarcity",s:"Cities face scarcity when demand outstrips what reliable sources can supply, because of physical limits, infrastructure gaps, or both.",m:"Physical scarcity means not enough water in the system; economic scarcity means water exists but infrastructure, finance or governance limit access. Urbanisation adds paved surfaces (less recharge), more demand, encroached lakes and polluted rivers. Unequal access within a city is common: tankers and borewells fill gaps unevenly.",q:"Why does paving a city reduce groundwater recharge?",o:["It increases evaporation from aquifers","It blocks infiltration into the soil","It raises the water table"],a:1,svg:'<rect x="20" y="40" width="22" height="60" fill="#7d93a8"/><rect x="48" y="24" width="26" height="76" fill="#7d93a8"/><rect x="80" y="54" width="20" height="46" fill="#7d93a8"/><rect x="10" y="100" width="160" height="6" fill="#2b3542"/><path d="M120 100 q8-24 20 0" stroke="#FF7A66" stroke-width="2" fill="none"/><text x="118" y="74" fill="#F2B544" font-size="18">!</text>'},
+ {t:"Water pollution",s:"Pollutants from sewage, industry, agriculture and natural geology can make water unsafe even where quantity is adequate.",m:"Point sources (a pipe discharging effluent) are easier to regulate than non-point sources (fertiliser runoff). In groundwater, geogenic contaminants such as fluoride and arsenic come from rocks; nitrate often comes from fertilisers and sewage. Indicators include BOD, COD, dissolved oxygen, TDS and specific ions measured against BIS IS 10500 drinking-water limits.",q:"Which contaminant is mainly geogenic (from rocks) in Indian groundwater?",o:["Fluoride","Plastic microfibres","Detergent foam"],a:0,svg:'<path d="M30 30 h30 v20 h-30z" fill="#7d93a8"/><path d="M60 40 h30 v50" stroke="#7d93a8" stroke-width="5" fill="none"/><path d="M60 100 q30-12 60 0 t60 0" stroke="#168BFF" stroke-width="3" fill="none"/><circle class="sink" cx="90" cy="94" r="5" fill="#F2B544"/><circle cx="110" cy="100" r="4" fill="#FF7A66"/>'},
+ {t:"Rainwater harvesting",s:"Capturing rain where it falls, for direct use or to recharge groundwater.",m:"A system has a catchment (roof), conveyance (gutters, pipes), first-flush diversion, filtration and storage or recharge. Collectable volume is V = A × R × C / 1000 m³. Example: a 100 m² RCC roof (C = 0.8) in 740 mm rainfall gives about 59 m³, roughly 59,000 litres a year in theory.",q:"In V = A × R × C / 1000, what does C represent?",o:["Storage capacity","Runoff coefficient","Catchment cost"],a:1,svg:'<path d="M20 60 L70 30 L120 60" stroke="#F2F8FC" stroke-width="2" fill="none"/><rect x="30" y="60" width="80" height="44" fill="#0C2F47" stroke="#28D9F2"/><path d="M120 60 v34 h14" stroke="#28D9F2" stroke-width="2" fill="none"/><rect x="134" y="76" width="30" height="30" fill="#168BFF" opacity=".7" stroke="#28D9F2"/><line class="drop" x1="60" y1="2" x2="56" y2="14" stroke="#7FB8FF" stroke-width="2"/><line class="drop" style="animation-delay:.5s" x1="84" y1="2" x2="80" y2="14" stroke="#7FB8FF" stroke-width="2"/>'},
+ {t:"Sustainable water management",s:"Balancing supply, demand and ecosystems so water use doesn't exceed what nature can renew.",m:"The '3R' approach (reduce, reuse, recycle) works alongside integrated water resources management (IWRM): planning surface water, groundwater and wastewater together at basin scale with community participation. Demand management (pricing, metering, efficient irrigation) usually costs less than new supply.",q:"Which is a demand-side measure?",o:["Building a new dam","Metering and fixing leaks","Long-distance water transfer"],a:1,svg:'<circle cx="90" cy="62" r="40" fill="none" stroke="#28D9F2" stroke-width="2" stroke-dasharray="60 8"/><path d="M90 40 q-16 22 0 34 q16-12 0-34z" fill="#168BFF"/><path d="M60 92 l-6 6 M120 92 l6 6" stroke="#3d9a54" stroke-width="3"/>'}];
+$('#learnGrid').innerHTML=LEARN.map(function(l,i){return '<article class="lcard reveal" id="lc'+i+'"><div class="art"><svg viewBox="0 0 180 120" aria-hidden="true">'+l.svg+'</svg></div><div class="body"><h3>'+l.t+'</h3><p>'+l.s+'</p><div class="more" id="lm'+i+'"><p>'+l.m+'</p></div><div class="row"><button class="btn sm" data-more="'+i+'" aria-expanded="false" aria-controls="lm'+i+'">Read more</button><button class="btn sm" data-quiz="'+i+'" aria-expanded="false" aria-controls="lq'+i+'">Check yourself</button></div><div class="quiz" id="lq'+i+'"><p>'+l.q+'</p>'+l.o.map(function(o,j){return '<button class="opt" data-q="'+i+'" data-o="'+j+'">'+o+'</button>';}).join('')+'<div class="fb" aria-live="polite"></div></div></div></article>';}).join('');
+$$('[data-more]').forEach(function(b){b.onclick=function(){var c=$('#lc'+b.dataset.more),o=c.classList.toggle('open');b.setAttribute('aria-expanded',o);b.textContent=o?'Show less':'Read more';};});
+$$('[data-quiz]').forEach(function(b){b.onclick=function(){var q=$('#lq'+b.dataset.quiz),o=q.classList.toggle('show');b.setAttribute('aria-expanded',o);};});
+$$('.opt').forEach(function(b){b.onclick=function(){var l=LEARN[b.dataset.q],ok=+b.dataset.o===l.a,box=b.parentNode;$$('.opt',box).forEach(function(x){x.classList.remove('right','wrong');});b.classList.add(ok?'right':'wrong');if(ok)$$('.opt',box)[l.a].classList.add('right');$('.fb',box).textContent=ok?'Correct.':'Not quite — try another answer, or open "Read more".';};});
+
+/* ================= INIT / ANIMATION ================= */
+renderLegend(); renderPanel(); setProfile('ludhiana'); renderCompare();
+function lazy3D(el,fn){var done=false;var io=new IntersectionObserver(function(es){if(!done&&es[0].isIntersecting){done=true;io.disconnect();try{fn();}catch(e){console.error(e);el.innerHTML='<div class="nogl">This 3D view could not start on this device.</div>';}}},{rootMargin:'300px'});io.observe(el);}
+try{initGlobe();}catch(e){console.error(e);$('#globe-wrap').innerHTML='<div class="nogl">3D globe unavailable on this device.</div>';}
+lazy3D($('#map-canvas'),initMap); lazy3D($('#cut-canvas'),initCut);
+
+var loaderDone=false;
+function finishLoader(){if(loaderDone)return;loaderDone=true;$('#loader').classList.add('done');intro();}
+$('#skip').onclick=finishLoader; setTimeout(finishLoader, REDUCED?200:1500);
+function intro(){
+  if(!window.gsap||REDUCED){$$('.reveal').forEach(function(e){e.style.opacity=1;e.style.transform='none';});if(globe)globe.intro();countUp(true);return;}
+  gsap.registerPlugin(ScrollTrigger);
+  var tl=gsap.timeline();
+  tl.from('.hero-title .ln > span',{yPercent:110,duration:1.1,stagger:.12,ease:"power4.out"})
+    .from('.h-rev',{y:24,opacity:0,duration:.8,stagger:.1,ease:"power3.out"},"-=.7");
+  if(globe)globe.intro();
+  // scroll camera move on hero
+  if(globe)gsap.to(globe.camera.position,{z:3.3,y:-.35,ease:"none",scrollTrigger:{trigger:'#home',start:'top top',end:'bottom top',scrub:1}});
+  if(globe)gsap.to(globe.root.rotation,{x:.25,ease:"none",scrollTrigger:{trigger:'#home',start:'top top',end:'bottom top',scrub:1}});
+  gsap.to('.hero-in',{yPercent:-18,opacity:.2,ease:"none",scrollTrigger:{trigger:'#home',start:'top top',end:'bottom top',scrub:true}});
+  $$('.reveal').forEach(function(el){gsap.to(el,{opacity:1,y:0,duration:.9,ease:"power3.out",scrollTrigger:{trigger:el,start:'top 88%',once:true}});});
+  ScrollTrigger.create({trigger:'.stats',start:'top 85%',once:true,onEnter:function(){countUp(false);}});
+}
+function countUp(instant){$$('[data-count]').forEach(function(el){var to=+el.dataset.count;if(instant||!window.gsap){el.textContent=to;return;}var o={v:0};gsap.to(o,{v:to,duration:1.6,ease:"power2.out",onUpdate:function(){el.textContent=Math.round(o.v);}});});}
+$('#ctaExplore').addEventListener('click',function(e){e.preventDefault();$('#map').scrollIntoView({behavior:REDUCED?'auto':'smooth'});});
+})();
+</script>
+</body>
+</html>
